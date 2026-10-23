@@ -11,6 +11,7 @@
  * is decided here, not by whatever variable an operator happens to add.
  */
 import { InstagramError } from '../core/types.js';
+import type { D1Like } from './story-store.js';
 
 /** The Worker bindings this deployment reads. Everything is optional at the type level and checked at runtime. */
 export interface WorkerEnv {
@@ -32,6 +33,8 @@ export interface WorkerEnv {
   IG_PRETTY_JSON?: string;
   /** KV namespace the OAuth provider keeps clients, grants and tokens in. */
   OAUTH_KV?: unknown;
+  /** Optional D1 database for hourly Story snapshots (`instagram_get_story_history`). */
+  STORY_DB?: D1Like;
 }
 
 /** The MCP endpoint path. */
