@@ -118,8 +118,18 @@ const CASES: LogCase[] = [
   },
   {
     name: 'instagram_get_media_insights',
-    args: { media_id: 'M1', metrics: ['views'], media_product_type: 'REELS' },
-    expect: { media_id: 'M1', metrics: ['views'], media_product_type: 'REELS' },
+    args: {
+      media_id: 'M1',
+      metrics: ['navigation'],
+      media_product_type: 'STORY',
+      breakdown: 'story_navigation_action_type',
+    },
+    expect: {
+      media_id: 'M1',
+      metrics: ['navigation'],
+      media_product_type: 'STORY',
+      breakdown: 'story_navigation_action_type',
+    },
   },
   {
     name: 'instagram_get_audience_demographics',
