@@ -1,5 +1,11 @@
 // Cloudflare Workers configuration for the remote, read-only Instagram MCP server.
 // See docs/cloudflare-workers.md for the full deployment guide.
+//
+// This committed file is a TEMPLATE with placeholders. For a real deployment copy
+// it to wrangler.local.jsonc (git-ignored), fill in your hostname and KV id there,
+// and pass it to wrangler: `npm run deploy:worker -- -c wrangler.local.jsonc`.
+// Run wrangler commands that may edit the config (`kv namespace create`) with
+// `-c wrangler.local.jsonc` too, so they never write real ids into this file.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "instagram-mcp",
@@ -8,6 +14,12 @@
   // node:crypto, node:async_hooks and friends are used by the shared core layer.
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
+  // Recommended: serve on a custom domain only, so the zone's WAF and Access rules
+  // always apply, and switch the unprotected *.workers.dev hostname off. The DNS
+  // record is created by `wrangler deploy`; the hostname must not have one already.
+  // "routes": [{ "pattern": "instagram-mcp.example.com", "custom_domain": true }],
+  // "workers_dev": false,
+  // "preview_urls": false,
   "vars": {
     // Public origin of this Worker (no path). It becomes the OAuth issuer and the
     // resource identifier `<origin>/mcp`, so it must match the URL clients use.
@@ -15,7 +27,8 @@
     "IG_LOG_LEVEL": "info",
   },
   // OAuth clients, grants and tokens (stored hashed / encrypted by the provider).
-  // Create it with `npx wrangler kv namespace create OAUTH_KV` and paste the id.
+  // Create it with `npx wrangler kv namespace create instagram-mcp-oauth` and paste
+  // the id. Keep the binding name OAUTH_KV: the OAuth provider reads env.OAUTH_KV.
   "kv_namespaces": [{ "binding": "OAUTH_KV", "id": "REPLACE_WITH_YOUR_KV_NAMESPACE_ID" }],
   // Secrets (never in this file): INSTAGRAM_ACCESS_TOKEN, MCP_OWNER_PASSWORD and,
   // optionally, MCP_STATIC_BEARER_TOKEN — set with `npx wrangler secret put <NAME>`.

@@ -68,31 +68,71 @@ long-lived Instagram User token for the account (get one with
 npm ci
 npx wrangler login
 
-# 1. KV namespace for OAuth state — paste the printed id into wrangler.jsonc (kv_namespaces[0].id)
-npx wrangler kv namespace create OAUTH_KV
+# 1. Your own config, outside git: wrangler.jsonc is a template with placeholders.
+cp wrangler.jsonc wrangler.local.jsonc          # git-ignored
 
-# 2. Set MCP_PUBLIC_URL in wrangler.jsonc ("vars") to the Worker's URL:
-#    https://instagram-mcp.<your-workers-subdomain>.workers.dev
-#    (or your custom domain). The Worker name is "name" in wrangler.jsonc.
+# 2. KV namespace for OAuth state — paste the printed id into wrangler.local.jsonc
+#    (kv_namespaces[0].id). Keep the binding name OAUTH_KV.
+npx wrangler kv namespace create instagram-mcp-oauth
 
-# 3. Secrets (each command prompts for the value; nothing lands in the repo)
-npx wrangler secret put INSTAGRAM_ACCESS_TOKEN
-npx wrangler secret put MCP_OWNER_PASSWORD        # e.g. output of: openssl rand -base64 24
-npx wrangler secret put MCP_STATIC_BEARER_TOKEN   # optional
+# 3. In wrangler.local.jsonc: uncomment "routes" with your hostname
+#    (custom_domain: true), "workers_dev": false and "preview_urls": false, and set
+#    MCP_PUBLIC_URL ("vars") to https://<that hostname>. The zone must be on
+#    Cloudflare and the hostname must not have a DNS record yet (deploy creates it).
 
-# 4. Check the build, then deploy
-npm run build:worker        # wrangler deploy --dry-run
-npm run deploy:worker       # wrangler deploy
+# 4. Secrets (each command prompts for the value; nothing lands in the repo)
+npx wrangler secret put INSTAGRAM_ACCESS_TOKEN -c wrangler.local.jsonc
+npx wrangler secret put MCP_OWNER_PASSWORD -c wrangler.local.jsonc  # e.g. output of: openssl rand -base64 24
+npx wrangler secret put MCP_STATIC_BEARER_TOKEN -c wrangler.local.jsonc  # optional
+
+# 5. Check the build, then deploy — always with your local config
+npm run build:worker -- -c wrangler.local.jsonc    # wrangler deploy --dry-run
+npm run deploy:worker -- -c wrangler.local.jsonc   # wrangler deploy
 ```
 
-The first `wrangler secret put` on a Worker that does not exist yet creates it;
-deploying after the secrets is fine either way. Re-run `npm run deploy:worker`
-after any code or `wrangler.jsonc` change.
+**Public repository?** Keep deployment-specific values (hostname, KV id, account
+id) in `wrangler.local.jsonc` only. None of them is a credential, but together
+they point straight at your server. Secrets never belong in either file.
 
-**Recommended:** add a Cloudflare WAF rate-limiting rule for `POST /authorize`
-and `/oauth/*` (for example 10 requests per minute per IP). The passphrase is
-compared in constant time and a wrong guess spends the consent form, but the
-Worker keeps no attempt counter of its own.
+The first `wrangler secret put` on a Worker that does not exist yet creates it;
+deploying after the secrets is fine either way. Re-run `npm run deploy:worker -- -c wrangler.local.jsonc`
+after any code or `wrangler.local.jsonc` change.
+
+### Hardening at the Cloudflare edge
+
+These need the Worker on a custom domain (a zone you own); they cannot be applied
+to `*.workers.dev`, which is why your `wrangler.local.jsonc` should switch that
+hostname off (`"workers_dev": false`).
+
+**1. Cloudflare Access on the consent page** (second factor in front of the
+passphrase). Zero Trust → Access → Applications → *Add an application* →
+*Self-hosted*:
+
+- Application domain: your host, path `authorize` (protect `/authorize` only).
+- Policy: *Allow*, Include → *Emails* → your address. Login method: one-time PIN
+  (or your identity provider).
+- Session duration: e.g. 24 hours.
+
+The consent page is opened in your browser, so Access does not get in the
+client's way. **Do not** put `/mcp`, `/oauth/token`, `/oauth/register` or
+`/.well-known/*` behind Access: ChatGPT's servers call them directly and cannot
+complete an Access login.
+
+**2. Rate limiting** — Security → WAF → *Rate limiting rules* → Create rule:
+
+- If: hostname equals your host **and** URI path is in `/authorize`,
+  `/oauth/register`, `/oauth/token`.
+- Characteristics: IP. Rate: 10 requests per 1 minute (the Free plan allows one
+  rule and a short period; use what the plan offers).
+- Action: Block, for 10 minutes.
+
+Dynamic Client Registration writes to KV, so this also keeps registration spam
+from using up the KV write quota.
+
+**3. Leave off for this hostname:** Bot Fight Mode, *I'm Under Attack* and any
+JavaScript / managed challenge. They block ChatGPT's server-to-server calls. If
+Bot Fight Mode is on for the zone, add a configuration rule or skip rule for this
+hostname.
 
 ### Local development
 
