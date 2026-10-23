@@ -51,8 +51,9 @@ deleting are not reachable from the Worker at all.
 | `MCP_OWNER_PASSWORD` | secret | yes | Passphrase the owner types on `/authorize` to approve a client. At least 16 characters; shorter or unset disables authorization. |
 | `MCP_STATIC_BEARER_TOKEN` | secret | no | Static `Authorization: Bearer` value for clients that can send a fixed header (not ChatGPT, see §4). At least 16 characters; off when unset. |
 | `MCP_PUBLIC_URL` | var | yes | Public origin of the Worker, no path (`https://instagram-mcp.<subdomain>.workers.dev`). It becomes the OAuth issuer and the resource `<origin>/mcp`, so it must be the exact URL clients use. |
+| `INSTAGRAM_TOKEN_EXPIRES_AT` | var | no | When the Instagram token expires, Unix seconds or ISO 8601 (`2026-12-22`). Lets `instagram_token_status` report days left and warn as expiry nears (§9). |
 | `INSTAGRAM_ACCOUNT_ID` | var | no | IG professional account ID; defaults to `me`, which on Instagram Login is the account itself, for every tool including account insights. |
-| `IG_LOG_LEVEL`, `IG_TIMEOUT_MS`, `IG_MAX_ITEMS`, `IG_MAX_CONCURRENT`, `IG_PRETTY_JSON` | var | no | Same meaning and ranges as for the stdio server ([architecture.md §12](architecture.md)). |
+| `IG_LOG_LEVEL`, `IG_TIMEOUT_MS`, `IG_MAX_ITEMS`, `IG_MAX_CONCURRENT`, `IG_PRETTY_JSON`, `IG_REFRESH_AFTER_DAYS` | var | no | Same meaning and ranges as for the stdio server ([architecture.md §12](architecture.md)). |
 | `OAUTH_KV` | KV binding | yes | OAuth clients, grants and tokens. The provider stores tokens and secrets only as hashes and encrypts grant props. |
 
 No other `IG_*` variable is read by the Worker: the tool surface, write mode and
@@ -229,6 +230,21 @@ the token in your env file, see the README), or:
 curl -s "https://graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token&access_token=$OLD_TOKEN"
 npx wrangler secret put INSTAGRAM_ACCESS_TOKEN   # paste the new access_token
 ```
+
+**Expiry warnings.** The refresh answer carries `expires_in` (seconds). Set
+`INSTAGRAM_TOKEN_EXPIRES_AT` in `vars` to the resulting date and redeploy, e.g.
+`date -u -v+"${EXPIRES_IN}"S +%Y-%m-%dT%H:%M:%SZ` on macOS or
+`date -u -d "+${EXPIRES_IN} seconds" +%Y-%m-%dT%H:%M:%SZ` on Linux. Then
+`instagram_token_status` reports `expiresAt`, `daysLeft` and `expiryState`
+(`expiring_soon` once `daysLeft` is at or below `IG_REFRESH_AFTER_DAYS`, 45 by
+default, so about two weeks into a 60-day token; `expired` after). Lower it in
+`vars` (1–60) to be warned later.
+
+The date is typed by hand, so nothing ties it to the token in the secret.
+`token_status` says so in its `warning`, and that warning text comes from the
+stdio server: there it names `IG_TOKEN_EXPIRES_AT` and the `refresh` / `login`
+CLI. On the Worker, read those as `INSTAGRAM_TOKEN_EXPIRES_AT` and the refresh
+steps above. Update the date every time you rotate the token.
 
 ## 10. Tests
 

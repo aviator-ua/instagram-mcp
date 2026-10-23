@@ -112,6 +112,7 @@ test('upstreamEnv forwards the account id and the tuning knobs, and nothing else
     IG_MAX_ITEMS: '50',
     IG_MAX_CONCURRENT: '2',
     IG_PRETTY_JSON: 'true',
+    IG_REFRESH_AFTER_DAYS: '14',
     IG_TOOL_PACKAGES: 'all',
     IG_WRITE_MODE: 'apply',
     IG_PACKAGES_READONLY: '',
@@ -129,6 +130,7 @@ test('upstreamEnv forwards the account id and the tuning knobs, and nothing else
     IG_MAX_ITEMS: '50',
     IG_MAX_CONCURRENT: '2',
     IG_PRETTY_JSON: 'true',
+    IG_REFRESH_AFTER_DAYS: '14',
   });
 });
 
@@ -137,4 +139,45 @@ test('upstreamEnv refuses a missing token, naming the secret and not echoing any
     () => upstreamEnv({ INSTAGRAM_ACCESS_TOKEN: '  ' }),
     validationError(/INSTAGRAM_ACCESS_TOKEN is not set/),
   );
+});
+
+test('upstreamEnv passes INSTAGRAM_TOKEN_EXPIRES_AT as bare Unix seconds', () => {
+  const targetSeconds = '1797897600';
+  const cases: [string, string][] = [
+    [targetSeconds, targetSeconds],
+    ['2026-12-22', '1797897600'],
+    ['2026-12-22T10:00:00Z', '1797933600'],
+    ['2026-12-22T12:00:00+02:00', '1797933600'],
+  ];
+
+  for (const [input, expected] of cases) {
+    const out = upstreamEnv({
+      INSTAGRAM_ACCESS_TOKEN: TARGET_TOKEN,
+      INSTAGRAM_TOKEN_EXPIRES_AT: input,
+    });
+
+    assert.equal(out.IG_TOKEN_EXPIRES_AT, expected, input);
+  }
+});
+
+test('upstreamEnv leaves the expiry out when INSTAGRAM_TOKEN_EXPIRES_AT is unset or blank', () => {
+  const unset = upstreamEnv({ INSTAGRAM_ACCESS_TOKEN: TARGET_TOKEN });
+  const blank = upstreamEnv({
+    INSTAGRAM_ACCESS_TOKEN: TARGET_TOKEN,
+    INSTAGRAM_TOKEN_EXPIRES_AT: ' ',
+  });
+
+  assert.equal('IG_TOKEN_EXPIRES_AT' in unset, false);
+  assert.equal('IG_TOKEN_EXPIRES_AT' in blank, false);
+});
+
+test('upstreamEnv refuses an expiry that is neither seconds nor an ISO 8601 date', () => {
+  for (const value of ['next month', '22.12.2026', '2026/12/22', '2026-13-45', '-5']) {
+    assert.throws(
+      () =>
+        upstreamEnv({ INSTAGRAM_ACCESS_TOKEN: TARGET_TOKEN, INSTAGRAM_TOKEN_EXPIRES_AT: value }),
+      validationError(/INSTAGRAM_TOKEN_EXPIRES_AT must be Unix seconds or an ISO 8601 date/),
+      value,
+    );
+  }
 });
