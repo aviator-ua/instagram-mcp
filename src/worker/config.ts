@@ -18,6 +18,12 @@ export interface WorkerEnv {
   INSTAGRAM_ACCESS_TOKEN?: string;
   /** Optional IG professional account ID; `me` is used when absent. */
   INSTAGRAM_ACCOUNT_ID?: string;
+  /**
+   * When the Instagram token expires: Unix seconds or an ISO 8601 date/time
+   * (`2026-12-22`, `2026-12-22T10:00:00Z`). Optional; lets
+   * `instagram_token_status` report days left and warn before expiry.
+   */
+  INSTAGRAM_TOKEN_EXPIRES_AT?: string;
   /** Public origin of this Worker, e.g. `https://instagram-mcp.example.workers.dev`. A plain var. */
   MCP_PUBLIC_URL?: string;
   /** Passphrase the owner types on the consent page. A Worker secret. */
@@ -30,6 +36,7 @@ export interface WorkerEnv {
   IG_MAX_ITEMS?: string;
   IG_MAX_CONCURRENT?: string;
   IG_PRETTY_JSON?: string;
+  IG_REFRESH_AFTER_DAYS?: string;
   /** KV namespace the OAuth provider keeps clients, grants and tokens in. */
   OAUTH_KV?: unknown;
 }
@@ -57,6 +64,7 @@ const SETTINGS_PASSTHROUGH = [
   'IG_MAX_ITEMS',
   'IG_MAX_CONCURRENT',
   'IG_PRETTY_JSON',
+  'IG_REFRESH_AFTER_DAYS',
 ] as const;
 
 /** A trimmed binding, or `undefined` when unset or blank. */
@@ -130,6 +138,35 @@ export function strongSecret(
   return value !== undefined && value.length >= MIN_SECRET_LENGTH ? value : undefined;
 }
 
+/** `YYYY-MM-DD`, optionally followed by a time part, as `Date.parse` reads ISO 8601. */
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}(?:T[0-9:.]+(?:Z|[+-]\d{2}:?\d{2})?)?$/;
+
+/**
+ * `INSTAGRAM_TOKEN_EXPIRES_AT` as the bare Unix-seconds record upstream reads
+ * from `IG_TOKEN_EXPIRES_AT`, or `undefined` when unset.
+ *
+ * Bare on purpose, without the token fingerprint `login` / `refresh` append:
+ * the operator types this date, and nothing ties it to the token in the secret.
+ * Upstream reads a bare record but reports it as unverified, which is the
+ * truth. Computing the fingerprint here would bind a date left over from the
+ * previous token to the new one the moment the secret is rotated.
+ *
+ * @throws InstagramError `kind: 'validation'` for a value that is neither.
+ */
+function tokenExpirySeconds(env: WorkerEnv): string | undefined {
+  const raw = binding(env, 'INSTAGRAM_TOKEN_EXPIRES_AT');
+  if (raw === undefined) return undefined;
+  if (/^\d+$/.test(raw)) return raw;
+  const ms = ISO_DATE.test(raw) ? Date.parse(raw) : Number.NaN;
+  if (!Number.isFinite(ms)) {
+    throw new InstagramError(
+      'INSTAGRAM_TOKEN_EXPIRES_AT must be Unix seconds or an ISO 8601 date such as 2026-12-22.',
+      { kind: 'validation' },
+    );
+  }
+  return String(Math.floor(ms / 1000));
+}
+
 /**
  * The `IG_*` environment the upstream loaders read, built from the allowlist.
  * The profile is pinned to Instagram Login (`ig-login`, `graph.instagram.com`),
@@ -159,6 +196,8 @@ export function upstreamEnv(env: WorkerEnv): Record<string, string> {
     IG_WRITE_JOURNAL: '/dev/null',
   };
   out.IG_ACCOUNT_ID = binding(env, 'INSTAGRAM_ACCOUNT_ID') ?? 'me';
+  const expiresAt = tokenExpirySeconds(env);
+  if (expiresAt !== undefined) out.IG_TOKEN_EXPIRES_AT = expiresAt;
   for (const name of SETTINGS_PASSTHROUGH) {
     const value = binding(env, name);
     if (value !== undefined) out[name] = value;

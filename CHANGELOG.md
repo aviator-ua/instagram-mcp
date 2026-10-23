@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `account`, `media`, `insights` and `messaging` packages are registered. Build
   with `npm run build:worker`, test in workerd with `npm run test:worker`;
   see `docs/cloudflare-workers.md`.
+- Worker: optional `INSTAGRAM_TOKEN_EXPIRES_AT` (Unix seconds or ISO 8601) so
+  `instagram_token_status` reports `expiresAt`, `daysLeft` and `expiring_soon`
+  for the Instagram token; `IG_REFRESH_AFTER_DAYS` is passed through to tune the
+  warning threshold.
 
 ### Changed
 
