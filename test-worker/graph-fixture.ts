@@ -76,6 +76,26 @@ export function graphFixture(request: Request): Response {
       data: [{ name: 'reach', period: 'day', total_value: { value: 1200 } }],
     });
   }
+  if (path === '/me/stories') {
+    return Response.json({
+      data: [
+        {
+          id: '18000000000000301',
+          media_type: 'IMAGE',
+          media_product_type: 'STORY',
+          timestamp: '2026-10-23T08:00:00+0000',
+        },
+      ],
+    });
+  }
+  if (path === '/18000000000000301/insights') {
+    return Response.json({
+      data: [
+        { name: 'views', period: 'lifetime', values: [{ value: 470 }] },
+        { name: 'reach', period: 'lifetime', values: [{ value: 455 }] },
+      ],
+    });
+  }
   if (path === '/18000000000000001/insights') {
     return Response.json({
       data: [

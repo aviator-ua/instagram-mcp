@@ -199,6 +199,19 @@ test('reads account insights without a configured account id', async () => {
   assert.equal(result.structuredContent.metrics[0].total_value.value, 1200);
 });
 
+test('the hourly cron snapshots live Stories into D1 for instagram_get_story_history', async () => {
+  const run = await server.getWorker().scheduled({ cron: '17 * * * *' });
+  assert.equal(run.outcome, 'ok');
+
+  const result = await callTool('instagram_get_story_history', {});
+  assert.notEqual(result.isError, true, JSON.stringify(result.content));
+  const [story] = result.structuredContent.stories;
+  assert.equal(story.id, '18000000000000301');
+  assert.equal(story.postedAt, '2026-10-23T08:00:00.000Z');
+  assert.deepEqual(story.metrics, { views: 470, reach: 455 });
+  assert.deepEqual(story.missingMetrics, ['replies', 'shares', 'total_interactions', 'navigation']);
+});
+
 test('reports a Graph error as a tool error', async () => {
   const result = await callTool('instagram_get_media_insights', { media_id: '18000000000000999' });
   assert.equal(result.isError, true);

@@ -30,6 +30,13 @@
   // Create it with `npx wrangler kv namespace create instagram-mcp-oauth` and paste
   // the id. Keep the binding name OAUTH_KV: the OAuth provider reads env.OAUTH_KV.
   "kv_namespaces": [{ "binding": "OAUTH_KV", "id": "REPLACE_WITH_YOUR_KV_NAMESPACE_ID" }],
+  // Optional Story history (docs/cloudflare-workers.md §8a): an hourly cron copies
+  // live Stories' insights into D1, read back by instagram_get_story_history.
+  // Create the database with `npx wrangler d1 create instagram-mcp-stories`.
+  // "d1_databases": [
+  //   { "binding": "STORY_DB", "database_name": "instagram-mcp-stories", "database_id": "REPLACE_WITH_YOUR_D1_ID" },
+  // ],
+  // "triggers": { "crons": ["17 * * * *"] },
   // Secrets (never in this file): INSTAGRAM_ACCESS_TOKEN, MCP_OWNER_PASSWORD and,
   // optionally, MCP_STATIC_BEARER_TOKEN — set with `npx wrangler secret put <NAME>`.
 }

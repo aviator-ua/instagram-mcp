@@ -40,6 +40,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `instagram_token_status` reports `expiresAt`, `daysLeft` and `expiring_soon`
   for the Instagram token; `IG_REFRESH_AFTER_DAYS` is passed through to tune the
   warning threshold.
+- Worker: optional Story history. With a D1 database bound as `STORY_DB` and a
+  Cron Trigger, live Stories' insights are snapshotted hourly, and the read-only
+  tool `instagram_get_story_history` returns each Story's last snapshot after it
+  has expired (absent metrics listed, never stored as zero).
 
 ### Changed
 
