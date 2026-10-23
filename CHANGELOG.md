@@ -36,6 +36,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   but `all`. An empty answer carries `emptyResultIsInconclusive: true` and a note
   instead of reading as an empty inbox; message text and usernames are fenced as
   untrusted text and never logged.
+- Worker: optional `INSTAGRAM_TOKEN_EXPIRES_AT` (Unix seconds or ISO 8601) so
+  `instagram_token_status` reports `expiresAt`, `daysLeft` and `expiring_soon`
+  for the Instagram token; `IG_REFRESH_AFTER_DAYS` is passed through to tune the
+  warning threshold.
 
 ### Changed
 
