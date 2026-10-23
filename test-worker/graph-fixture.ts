@@ -67,6 +67,10 @@ export function graphFixture(request: Request): Response {
       paging: { cursors: { before: 'B2' } },
     });
   }
+  if (path === '/me/conversations') {
+    // What the verified account sees today: HTTP 200 with an empty list.
+    return Response.json({ data: [] });
+  }
   if (path === '/18000000000000001/insights') {
     return Response.json({
       data: [

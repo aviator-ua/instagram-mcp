@@ -145,6 +145,8 @@ test('lists only read-only tools', async () => {
     'instagram_get_media',
     'instagram_get_media_insights',
     'instagram_get_account_insights',
+    'instagram_list_conversations',
+    'instagram_get_messages',
   ]) {
     assert.ok(names.includes(required), `${required} should be registered`);
   }
@@ -180,6 +182,14 @@ test('paginates media with the Graph cursor', async () => {
   const page2 = second.structuredContent;
   assert.equal(page2.items[0].id, '18000000000000002');
   assert.equal(page2.paging.after, undefined);
+});
+
+test('reports an empty conversation list as inconclusive, not as an empty inbox', async () => {
+  const result = await callTool('instagram_list_conversations', {});
+  assert.notEqual(result.isError, true);
+  assert.deepEqual(result.structuredContent.conversations, []);
+  assert.equal(result.structuredContent.emptyResultIsInconclusive, true);
+  assert.match(result.structuredContent.note, /not proof/);
 });
 
 test('reports a Graph error as a tool error', async () => {
