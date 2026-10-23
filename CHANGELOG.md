@@ -17,12 +17,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `account`, `media`, `insights` and `messaging` packages are registered. Build
   with `npm run build:worker`, test in workerd with `npm run test:worker`;
   see `docs/cloudflare-workers.md`.
+- `instagram_get_media_insights` accepts the reel watch-time metrics
+  `ig_reels_avg_watch_time` and `ig_reels_video_view_total_time` (REELS only) and
+  `follows`, `profile_visits`, `profile_activity` (feed posts and stories), per
+  Meta's media-insights metrics table.
+- `instagram_get_media_insights` takes an optional
+  `breakdown: "story_navigation_action_type"`, which splits a story's `navigation`
+  into tap forward / tap back / tap exit / swipe forward. It combines with the
+  `navigation` metric alone (the default when a breakdown is given); any other
+  metric beside it is refused before a call, since Meta rejects the whole request.
+- Published metric rows for the two watch-time metrics carry
+  `unit: "milliseconds"`; values are passed through unconverted.
 
 ### Changed
 
 - Graph requests ask `fetch` for `redirect: 'manual'` and refuse any 3xx answer
   themselves (`kind: upstream`, never retried), instead of `redirect: 'error'`,
   which the Workers runtime rejects. Redirects are still never followed.
+- A bare `instagram_get_media_insights` call with `media_product_type: "REELS"`
+  now also requests `ig_reels_avg_watch_time` and `ig_reels_video_view_total_time`.
+  The FEED, STORY and unknown-type defaults are unchanged.
 
 ## [0.8.0] — 2026-10-13
 
