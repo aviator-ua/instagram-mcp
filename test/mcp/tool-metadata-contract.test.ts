@@ -210,6 +210,11 @@ function synthesizeArgs(spec: ToolSpec): Record<string, unknown> {
     const value = sampleValue(field);
     if (value !== undefined) args[key] = value;
   }
+  // The one cross-field rule a per-field sample cannot see: get_media_insights'
+  // `breakdown` combines with `navigation` alone, and the first `metrics` sample
+  // is `views`, so the pair is refused before any request and the probe would
+  // reach no outcome. Dropped, the probe exercises the plain read path.
+  if (spec.name === 'instagram_get_media_insights') delete args.breakdown;
   return args;
 }
 
