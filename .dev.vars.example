@@ -1,0 +1,11 @@
+# Local secrets for `npx wrangler dev`. Copy to .dev.vars (git-ignored) and fill in.
+# Placeholders only — never commit real values.
+INSTAGRAM_ACCESS_TOKEN=IGAA_your_long_lived_instagram_user_token
+# Optional: the IG professional account ID; `me` is used when unset.
+# INSTAGRAM_ACCOUNT_ID=17841400000000000
+# Passphrase typed on the /authorize page (at least 16 characters).
+MCP_OWNER_PASSWORD=change-me-to-a-long-random-passphrase
+# Optional static bearer for header-capable clients (at least 16 characters).
+# MCP_STATIC_BEARER_TOKEN=change-me-to-a-long-random-token
+# For local dev the public URL is the wrangler dev origin.
+MCP_PUBLIC_URL=http://localhost:8787

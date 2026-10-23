@@ -12,6 +12,8 @@ export default tseslint.config(
       'scripts/**',
       'bin/**',
       'docs/',
+      // Wrangler's local build output and state.
+      '.wrangler/',
       // Local-only harness dir; agent worktrees there hold full repo copies.
       '.claude/',
     ],
@@ -114,6 +116,23 @@ export default tseslint.config(
       '@typescript-eslint/no-unsafe-call': 'off',
       '@typescript-eslint/no-unsafe-return': 'off',
       '@typescript-eslint/no-unsafe-argument': 'off',
+    },
+  },
+
+  // The Worker runtime test is plain ESM run by node:test against workerd; it is
+  // outside the TypeScript project, so it is linted without type information.
+  {
+    files: ['test-worker/**/*.mjs'],
+    ...tseslint.configs.disableTypeChecked,
+    languageOptions: {
+      ...tseslint.configs.disableTypeChecked.languageOptions,
+      globals: {
+        console: 'readonly',
+        Response: 'readonly',
+        Request: 'readonly',
+        URL: 'readonly',
+        URLSearchParams: 'readonly',
+      },
     },
   },
 

@@ -1,0 +1,11 @@
+// Wrangler config for the Worker runtime test only (test-worker/worker-runtime.test.mjs).
+// Same runtime settings as the production wrangler.jsonc, with the Graph-faking entry.
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "instagram-mcp-runtime-test",
+  "main": "fixture.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": { "MCP_PUBLIC_URL": "http://localhost", "IG_LOG_LEVEL": "warn" },
+  "kv_namespaces": [{ "binding": "OAUTH_KV", "id": "runtime-test-kv" }],
+}
