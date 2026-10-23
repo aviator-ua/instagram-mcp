@@ -8,4 +8,12 @@
   "compatibility_flags": ["nodejs_compat"],
   "vars": { "MCP_PUBLIC_URL": "http://localhost", "IG_LOG_LEVEL": "warn" },
   "kv_namespaces": [{ "binding": "OAUTH_KV", "id": "runtime-test-kv" }],
+  "d1_databases": [
+    {
+      "binding": "STORY_DB",
+      "database_name": "runtime-test-stories",
+      "database_id": "runtime-test-d1",
+    },
+  ],
+  "triggers": { "crons": ["17 * * * *"] },
 }

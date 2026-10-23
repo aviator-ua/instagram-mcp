@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `account`, `media`, `insights` and `messaging` packages are registered. Build
   with `npm run build:worker`, test in workerd with `npm run test:worker`;
   see `docs/cloudflare-workers.md`.
+- Worker: optional Story history. With a D1 database bound as `STORY_DB` and a
+  Cron Trigger, live Stories' insights are snapshotted hourly, and the read-only
+  tool `instagram_get_story_history` returns each Story's last snapshot after it
+  has expired (absent metrics listed, never stored as zero).
 
 ### Changed
 
