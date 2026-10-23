@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Remote, read-only deployment on Cloudflare Workers (`src/worker/`,
+  `worker/index.ts`, `wrangler.jsonc`): Streamable HTTP at `/mcp`, protected by
+  OAuth 2.1 (authorization code + PKCE, Dynamic Client Registration, refresh
+  tokens) through `@cloudflare/workers-oauth-provider`, with an owner-passphrase
+  consent page and an optional static bearer. Only read-only tools of the
+  `account`, `media`, `insights` and `messaging` packages are registered. Build
+  with `npm run build:worker`, test in workerd with `npm run test:worker`;
+  see `docs/cloudflare-workers.md`.
+
+### Changed
+
+- Graph requests ask `fetch` for `redirect: 'manual'` and refuse any 3xx answer
+  themselves (`kind: upstream`, never retried), instead of `redirect: 'error'`,
+  which the Workers runtime rejects. Redirects are still never followed.
+
 ## [0.8.0] — 2026-10-13
 
 ### Added
