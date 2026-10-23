@@ -173,6 +173,21 @@ test('a tool call reaches Graph with the configured token and never echoes it', 
   assert.ok(!lines.join('\n').includes(TARGET_TOKEN), 'the token must not reach the logs');
 });
 
+test('account-level insights address me when no account id is configured', async () => {
+  const { stream } = captureSink();
+  const { fetchImpl, urls } = graph();
+
+  const { json } = await call(
+    'tools/call',
+    { name: 'instagram_get_account_insights', arguments: { metrics: ['reach'] } },
+    { stream, fetchImpl },
+  );
+
+  assert.notEqual(json.result.isError, true, JSON.stringify(json.result.content));
+  assert.equal(urls.length, 1);
+  assert.match(new URL(urls[0] as string).pathname, /^\/v\d+\.\d+\/me\/insights$/);
+});
+
 test('the default clock and console sink are used when nothing is injected', async (t) => {
   const logged = t.mock.method(console, 'log', () => undefined);
   const { fetchImpl } = graph();

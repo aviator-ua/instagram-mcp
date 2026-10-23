@@ -67,6 +67,11 @@ export function graphFixture(request: Request): Response {
       paging: { cursors: { before: 'B2' } },
     });
   }
+  if (path === '/me/insights') {
+    return Response.json({
+      data: [{ name: 'reach', period: 'day', total_value: { value: 1200 } }],
+    });
+  }
   if (path === '/18000000000000001/insights') {
     return Response.json({
       data: [

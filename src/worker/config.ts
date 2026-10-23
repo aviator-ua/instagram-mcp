@@ -137,6 +137,12 @@ export function strongSecret(
  * to a fixed path so `loadSettings` never consults a home directory the Worker
  * runtime does not have (no write tool is registered, so nothing writes to it).
  *
+ * The account id defaults to `me`. Most tools already fall back to `me`, but
+ * the account-level insights readers refuse an unset id on purpose: on Facebook
+ * Login `me` is the Page or user behind the token, not the Instagram account.
+ * On Instagram Login, the only path here, `me` IS the account, so the default
+ * is exact for every tool.
+ *
  * @throws InstagramError `kind: 'validation'` when the access token is missing.
  */
 export function upstreamEnv(env: WorkerEnv): Record<string, string> {
@@ -152,8 +158,7 @@ export function upstreamEnv(env: WorkerEnv): Record<string, string> {
     IG_AUTH_MODE: 'ig-login',
     IG_WRITE_JOURNAL: '/dev/null',
   };
-  const accountId = binding(env, 'INSTAGRAM_ACCOUNT_ID');
-  if (accountId !== undefined) out.IG_ACCOUNT_ID = accountId;
+  out.IG_ACCOUNT_ID = binding(env, 'INSTAGRAM_ACCOUNT_ID') ?? 'me';
   for (const name of SETTINGS_PASSTHROUGH) {
     const value = binding(env, name);
     if (value !== undefined) out[name] = value;
