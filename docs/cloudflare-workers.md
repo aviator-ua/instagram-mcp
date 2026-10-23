@@ -51,7 +51,7 @@ deleting are not reachable from the Worker at all.
 | `MCP_OWNER_PASSWORD` | secret | yes | Passphrase the owner types on `/authorize` to approve a client. At least 16 characters; shorter or unset disables authorization. |
 | `MCP_STATIC_BEARER_TOKEN` | secret | no | Static `Authorization: Bearer` value for clients that can send a fixed header (not ChatGPT, see §4). At least 16 characters; off when unset. |
 | `MCP_PUBLIC_URL` | var | yes | Public origin of the Worker, no path (`https://instagram-mcp.<subdomain>.workers.dev`). It becomes the OAuth issuer and the resource `<origin>/mcp`, so it must be the exact URL clients use. |
-| `INSTAGRAM_ACCOUNT_ID` | var | no | IG professional account ID; `me` is used when unset. |
+| `INSTAGRAM_ACCOUNT_ID` | var | no | IG professional account ID; defaults to `me`, which on Instagram Login is the account itself, for every tool including account insights. |
 | `IG_LOG_LEVEL`, `IG_TIMEOUT_MS`, `IG_MAX_ITEMS`, `IG_MAX_CONCURRENT`, `IG_PRETTY_JSON` | var | no | Same meaning and ranges as for the stdio server ([architecture.md §12](architecture.md)). |
 | `OAUTH_KV` | KV binding | yes | OAuth clients, grants and tokens. The provider stores tokens and secrets only as hashes and encrypts grant props. |
 

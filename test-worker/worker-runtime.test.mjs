@@ -192,6 +192,13 @@ test('reports an empty conversation list as inconclusive, not as an empty inbox'
   assert.match(result.structuredContent.note, /not proof/);
 });
 
+test('reads account insights without a configured account id', async () => {
+  const result = await callTool('instagram_get_account_insights', { metrics: ['reach'] });
+  assert.notEqual(result.isError, true, JSON.stringify(result.content));
+  assert.equal(result.structuredContent.metrics[0].name, 'reach');
+  assert.equal(result.structuredContent.metrics[0].total_value.value, 1200);
+});
+
 test('reports a Graph error as a tool error', async () => {
   const result = await callTool('instagram_get_media_insights', { media_id: '18000000000000999' });
   assert.equal(result.isError, true);

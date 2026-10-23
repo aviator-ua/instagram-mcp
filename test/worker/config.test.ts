@@ -90,7 +90,7 @@ test('strongSecret returns a trimmed secret of at least the minimum length, else
   );
 });
 
-test('upstreamEnv pins the Instagram Login profile and a fixed journal path', () => {
+test('upstreamEnv pins the Instagram Login profile, a fixed journal path and the me account', () => {
   const env: WorkerEnv = { INSTAGRAM_ACCESS_TOKEN: ` ${TARGET_TOKEN}\n` };
 
   const out = upstreamEnv(env);
@@ -99,6 +99,7 @@ test('upstreamEnv pins the Instagram Login profile and a fixed journal path', ()
     IG_ACCESS_TOKEN: TARGET_TOKEN,
     IG_AUTH_MODE: 'ig-login',
     IG_WRITE_JOURNAL: '/dev/null',
+    IG_ACCOUNT_ID: 'me',
   });
 });
 
