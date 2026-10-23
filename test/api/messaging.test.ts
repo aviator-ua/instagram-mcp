@@ -246,3 +246,30 @@ test('getConversationMessages encodes both the conversation and the message id',
     ['/T%231', '/m%2F1'],
   );
 });
+
+test('real Instagram Login ids — long base64url blobs — are read in full', async () => {
+  // Conversation and message ids on this path run to 100–150 characters, well
+  // past the 64-character Graph object-id bound; nothing in this layer may cut,
+  // refuse or re-shape them.
+  const conversationId =
+    'aWdfZAG06MTpJR01lc3NhZA2VUaHJlYWQ6MTc4NDE0MzU3NjI1NDY0NDU6MzQwMjgyMzY2ODQxNzEwMzAwOTQ5MTI4MTY2NjE2MDE2NTk5Nzk4';
+  const messageId =
+    'aWdfZAG1faXRlbToxOklHTWVzc2FnZAUlEOjE3ODQxNDM1NzYyNTQ2NDQ1OjM0MDI4MjM2Njg0MTcxMDMwMDk0OTEyODE2NjYxNjAxNjU5OTc5ODozMjA5NDc2NTQzMjEwOTg3NjU0MzIxMDk4NzY1NDMy';
+  assert.ok(conversationId.length > 64 && messageId.length > 140);
+  const { req, calls } = fakeReq((opts) =>
+    opts.path === `/${conversationId}`
+      ? { id: conversationId, messages: { data: [{ id: messageId }] } }
+      : { id: messageId, message: 'hi' },
+  );
+  const read = await getConversationMessages(req, { conversationId });
+  assert.deepEqual(
+    calls.map((c) => c.path),
+    [`/${conversationId}`, `/${messageId}`],
+  );
+  assert.deepEqual(read.messages, [{ id: messageId, message: 'hi' }]);
+  assert.equal(read.omittedWithoutId, 0);
+
+  const { req: listReq } = fakeReq(() => ({ data: [{ id: conversationId }] }));
+  const page = await listConversations(listReq, { igId: 'me', maxItems: 10 });
+  assert.deepEqual(page.items, [{ id: conversationId }]);
+});

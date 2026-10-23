@@ -13,7 +13,7 @@
  * an explicit list naming `messaging`.
  */
 import { z } from 'zod';
-import { graphObjectId } from './ids.js';
+import { messagingObjectId } from './ids.js';
 import { defineTool, type ToolSpec } from '../mcp/define.js';
 import { fence, json } from '../mcp/result.js';
 import { isoFromEpochSeconds } from '../core/time.js';
@@ -270,7 +270,7 @@ const getMessagesTool = defineTool({
   paths: ['ig-login'],
   annotations: readOnly,
   input: {
-    conversation_id: graphObjectId().describe(
+    conversation_id: messagingObjectId().describe(
       'The conversation id (from instagram_list_conversations).',
     ),
     limit: z

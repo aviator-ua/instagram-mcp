@@ -152,7 +152,7 @@ operator opts in with `IG_TOOL_PACKAGES=all` or an explicit list naming
 | Tool | Ann. | Purpose / Graph call |
 |---|---|---|
 | `instagram_list_conversations` | RO | `GET /{ig-id}/conversations?platform=instagram&fields=id,updated_time`, cursor-paginated. An empty first page is published with `emptyResultIsInconclusive: true` and a `note`: Instagram omits Requests-folder conversations inactive for 30 days *[verified 2026-10-23]*, and app mode, the account's message-access setting and the access level are named as possible causes, not verified ones |
-| `instagram_get_messages` | RO | `GET /{conversation-id}?fields=messages`, then `GET /{message-id}?fields=id,created_time,from,to,message` per message (`limit` 1–20). Only the **20 most recent** messages of a conversation are readable *[verified 2026-10-23]*; a message whose detail read fails with a non-credential error keeps `id`/`created_time` and is marked `detailsUnavailable`. Message text and usernames are fenced |
+| `instagram_get_messages` | RO | `GET /{conversation-id}?fields=messages`, then `GET /{message-id}?fields=id,created_time,from,to,message` per message (`limit` 1–20). `conversation_id` takes the messaging id rule, not the 64-character Graph one: Instagram Login conversation and message ids are opaque base64url-style blobs of ~100–150 characters, so it admits 1–512 characters of letters, digits, `_`, `-` and `=` (`tools/ids.ts` `messagingObjectId`). Only the **20 most recent** messages of a conversation are readable *[verified 2026-10-23]*; a message whose detail read fails with a non-credential error keeps `id`/`created_time` and is marked `detailsUnavailable`. Message text and usernames are fenced |
 
 ## Structured output
 
