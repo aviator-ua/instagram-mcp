@@ -4,7 +4,7 @@
 <title>instagram-mcp-ai — Instagram MCP Server documentation</title>
 <meta
   name="description"
-  content="instagram-mcp-ai is a locally-run TypeScript MCP server that exposes an Instagram professional account as 29 safe, well-annotated tools over the official Meta Graph API — no scraping, no private APIs, no credential automation."
+  content="instagram-mcp-ai is a locally-run TypeScript MCP server that exposes an Instagram professional account as 31 safe, well-annotated tools over the official Meta Graph API — no scraping, no private APIs, no credential automation."
 />
 <link rel="canonical" href="https://ivanbbaev.github.io/instagram-mcp/" />
 
@@ -17,7 +17,7 @@
 <meta property="og:title" content="instagram-mcp-ai — Instagram MCP Server" />
 <meta
   property="og:description"
-  content="A locally-run TypeScript MCP server exposing an Instagram professional account as 29 safe tools over the official Meta Graph API. Preview-by-default writes, MIT, Node 22+."
+  content="A locally-run TypeScript MCP server exposing an Instagram professional account as 31 safe tools over the official Meta Graph API. Preview-by-default writes, MIT, Node 22+."
 />
 <meta property="og:url" content="https://ivanbbaev.github.io/instagram-mcp/" />
 <!--
@@ -31,7 +31,7 @@
 <meta property="og:image:height" content="630" />
 <meta
   property="og:image:alt"
-  content="instagram-mcp-ai — Instagram MCP server. 29 tools, MIT, Node 22."
+  content="instagram-mcp-ai — Instagram MCP server. 31 tools, MIT, Node 22."
 />
 
 <!-- Twitter -->
@@ -39,10 +39,10 @@
 <meta name="twitter:title" content="instagram-mcp-ai — Instagram MCP Server" />
 <meta
   name="twitter:description"
-  content="A locally-run TypeScript MCP server exposing an Instagram professional account as 29 safe tools over the official Meta Graph API."
+  content="A locally-run TypeScript MCP server exposing an Instagram professional account as 31 safe tools over the official Meta Graph API."
 />
 <meta name="twitter:image" content="https://ivanbbaev.github.io/instagram-mcp/assets/og-banner.svg" />
-<meta name="twitter:image:alt" content="instagram-mcp-ai — 29 tools, MIT, Node 22." />
+<meta name="twitter:image:alt" content="instagram-mcp-ai — 31 tools, MIT, Node 22." />
 
 <!-- GA4: add your own measurement ID here if desired -->
 
@@ -63,7 +63,7 @@
       "alternateName": "Instagram MCP Server",
       "applicationCategory": "DeveloperApplication",
       "operatingSystem": "Cross-platform (Node.js 22+)",
-      "description": "A locally-run TypeScript MCP server that exposes an Instagram professional account (Business or Creator) as 29 safe, well-annotated Model Context Protocol tools over the official Meta Graph API. Writes preview by default; no scraping, private APIs, or credential automation.",
+      "description": "A locally-run TypeScript MCP server that exposes an Instagram professional account (Business or Creator) as 31 safe, well-annotated Model Context Protocol tools over the official Meta Graph API. Writes preview by default; no scraping, private APIs, or credential automation.",
       "url": "https://ivanbbaev.github.io/instagram-mcp/",
       "downloadUrl": "https://www.npmjs.com/package/instagram-mcp-ai",
       "softwareVersion": "0.7.0",
@@ -198,7 +198,7 @@
     <h4>Reference</h4>
     <nav aria-label="Reference">
       <a href="#packages">Packages &amp; profiles</a>
-      <a href="#tools">Tools (29)</a>
+      <a href="#tools">Tools (31)</a>
       <a href="#use-cases">Use cases</a>
     </nav>
 
@@ -220,12 +220,12 @@
           <h1>Give your AI assistant an <span class="accent">Instagram</span> account it can operate safely.</h1>
           <p class="lead">
             <strong>instagram-mcp-ai</strong> is a locally-run TypeScript MCP server that turns an
-            Instagram professional account into 29 well-annotated tools — talking only to the
+            Instagram professional account into 31 well-annotated tools — talking only to the
             official Meta Graph API, with writes that preview before they touch anything.
           </p>
           <div class="hero-cta">
             <a class="btn primary" href="#quickstart">Get started</a>
-            <a class="btn" href="#tools">Browse the 29 tools</a>
+            <a class="btn" href="#tools">Browse the 31 tools</a>
             <a class="btn" href="https://github.com/IvanBBaev/instagram-mcp" rel="noopener">View on GitHub</a>
           </div>
           <div class="badges">
@@ -265,7 +265,7 @@
       </div>
 
       <div class="stat-row">
-        <div class="stat"><span class="n">29</span><span class="l">MCP tools</span></div>
+        <div class="stat"><span class="n">31</span><span class="l">MCP tools</span></div>
         <div class="stat"><span class="n">6</span><span class="l">packages</span></div>
         <div class="stat"><span class="n">2</span><span class="l">auth paths</span></div>
         <div class="stat"><span class="n">4</span><span class="l">runtime deps</span></div>
@@ -682,13 +682,13 @@ IG_ALLOW_DESTRUCTIVE=false</code></pre>
     <section id="packages">
       <h2>Packages &amp; profiles <a class="anchor" href="#packages" aria-label="Link to this section">#</a></h2>
       <p>
-        The 29 tools are grouped into six <strong>packages</strong>. You choose which to expose with
+        The 31 tools are grouped into seven <strong>packages</strong>. You choose which to expose with
         <code>IG_TOOL_PACKAGES</code> — either a named <strong>profile</strong> or an explicit list.
-        The default is <code>core</code>, which deliberately leaves <code>discovery</code> dark.
+        The default is <code>core</code>, which deliberately leaves <code>discovery</code> and <code>messaging</code> dark.
       </p>
       <ul>
-        <li><strong>Profiles</strong> — <code>core</code> (default): account, media, publishing, comments, insights (26 tools). <code>reader</code>: account, media, insights, comments, discovery — <strong>forced read-only</strong>, so the write tools those packages also carry (comment create/reply/hide/delete, comments toggle) are not registered at all (16 tools). <code>publisher</code>: account, media, publishing, comments. <code>all</code>: every package (29 tools).</li>
-        <li><strong>Packages</strong> — <code>account</code>, <code>media</code>, <code>publishing</code>, <code>comments</code>, <code>insights</code>, <code>discovery</code>.</li>
+        <li><strong>Profiles</strong> — <code>core</code> (default): account, media, publishing, comments, insights (26 tools). <code>reader</code>: account, media, insights, comments, discovery — <strong>forced read-only</strong>, so the write tools those packages also carry (comment create/reply/hide/delete, comments toggle) are not registered at all (16 tools). <code>publisher</code>: account, media, publishing, comments. <code>all</code>: every package (31 tools) — the only profile that includes <code>messaging</code>.</li>
+        <li><strong>Packages</strong> — <code>account</code>, <code>media</code>, <code>publishing</code>, <code>comments</code>, <code>insights</code>, <code>discovery</code>, <code>messaging</code> (read-only DMs, Instagram Login only).</li>
       </ul>
       <div class="codeblock" data-lang="dotenv">
 <pre><code># Named profile …
@@ -711,7 +711,7 @@ IG_TOOL_PACKAGES=account,media,insights</code></pre>
     <section id="tools">
       <h2>Tools <a class="anchor" href="#tools" aria-label="Link to this section">#</a></h2>
       <p>
-        All 29 tools, grouped by package. <span class="pill ro">read</span> tools never mutate;
+        All 31 tools, grouped by package. <span class="pill ro">read</span> tools never mutate;
         <span class="pill wr">write</span> tools preview by default and act only with <code>apply: true</code>.
         <span class="pill pb">Path&nbsp;B</span> marks tools available only on Facebook Login.
       </p>
@@ -966,6 +966,24 @@ IG_TOOL_PACKAGES=account,media,insights</code></pre>
             <tr><td><code>mediaAfter</code></td><td>string</td><td><span class="opt">optional</span></td><td>The <code>mediaPaging.after</code> cursor from a previous call, to read the next page of media.</td></tr>
           </tbody></table></div>
         </details>
+
+        <!-- messaging -->
+        <h3 class="pkg-head" id="pkg-messaging">messaging <span class="pkg-meta">— read-only Direct Messages · Instagram Login only · <code>all</code> profile only <em>(2 tools)</em></span></h3>
+        <details class="tool">
+          <summary><code>instagram_list_conversations</code> <span class="pill ro">read</span><span class="tool-sum">List the account's DM conversations (id and last activity), cursor-paginated. An empty list is flagged as inconclusive, not as an empty inbox.</span></summary>
+          <div class="tool-params"><table><thead><tr><th>Parameter</th><th>Type</th><th></th><th>Notes</th></tr></thead><tbody>
+            <tr><td><code>limit</code></td><td>number</td><td><span class="opt">optional</span></td><td>Page-size hint, 1–100.</td></tr>
+            <tr><td><code>after</code></td><td>string</td><td><span class="opt">optional</span></td><td>Paging cursor from a previous call.</td></tr>
+            <tr><td><code>fetchAll</code></td><td>boolean</td><td><span class="opt">optional</span></td><td>Follow cursors up to the server item cap.</td></tr>
+          </tbody></table></div>
+        </details>
+        <details class="tool">
+          <summary><code>instagram_get_messages</code> <span class="pill ro">read</span><span class="tool-sum">Read the newest messages of one conversation — Instagram serves only the 20 most recent. Message text and usernames are fenced. Nothing is ever sent.</span></summary>
+          <div class="tool-params"><table><thead><tr><th>Parameter</th><th>Type</th><th></th><th>Notes</th></tr></thead><tbody>
+            <tr><td><code>conversation_id</code></td><td>string</td><td><span class="req">required</span></td><td>From <code>instagram_list_conversations</code>.</td></tr>
+            <tr><td><code>limit</code></td><td>number</td><td><span class="opt">optional</span></td><td>1–20 newest messages; one Graph call each.</td></tr>
+          </tbody></table></div>
+        </details>
       </div>
     </section>
 
@@ -1071,7 +1089,7 @@ IG_TOOL_PACKAGES=account,media,insights</code></pre>
         <svg viewBox="0 0 720 260" role="img" aria-label="Four-layer architecture: tools depends on mcp and api; api depends on core.">
           <rect class="box accent" x="30" y="24" width="660" height="46" rx="8" />
           <text class="lbl" x="52" y="46">tools</text>
-          <text class="sub" x="52" y="62">29 tool specs, grouped into 6 packages (tools-as-data)</text>
+          <text class="sub" x="52" y="62">31 tool specs, grouped into 7 packages (tools-as-data)</text>
           <text class="tag" x="640" y="52" text-anchor="end">Layer 3</text>
 
           <rect class="box" x="30" y="86" width="320" height="46" rx="8" />

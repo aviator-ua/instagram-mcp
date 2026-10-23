@@ -141,12 +141,18 @@ empirical probe decides whether this package ships or stays dark (see roadmap).
 | `instagram_get_hashtag_media` | RO | `GET /{hashtag-id}/top_media` or `/recent_media` (`user_id` required; public media only) |
 | `instagram_discover_business` | RO | Public profile + media of another business/creator: `GET /{ig-id}?fields=business_discovery.username(<handle>){followers_count,media_count,media{...}}`. The media edge publishes `mediaPaging`: `truncated: true` with `after` when Instagram returned a media cursor — pass it back as `mediaAfter` (sent as `media.after(<cursor>)`) to read further — and without `after`, plus a `note`, when the cursor is unusable (CC-DATA-116) |
 
-## Package `messaging` (phase 2 — design TBD)
+## Package `messaging` (read-only; profile `all` only; **Path A only**)
 
-Conversations list, read messages, send reply (24-hour human-agent window rules),
-via Messenger Platform endpoints. Deliberately deferred: policy-sensitive
-(messaging windows), webhook-dependent for real-time, and the write-safety model
-needs its own review. Will ship dark until reviewed.
+The read half of the Instagram Login Conversations API. No send tool exists —
+sending stays at DEFER in [messaging.md](messaging.md). The package is in no named
+profile but `all`: a DM inbox holds third parties' private messages, so an
+operator opts in with `IG_TOOL_PACKAGES=all` or an explicit list naming
+`messaging`. Needs `instagram_business_manage_messages`.
+
+| Tool | Ann. | Purpose / Graph call |
+|---|---|---|
+| `instagram_list_conversations` | RO | `GET /{ig-id}/conversations?platform=instagram&fields=id,updated_time`, cursor-paginated. An empty first page is published with `emptyResultIsInconclusive: true` and a `note`: Instagram omits Requests-folder conversations inactive for 30 days *[verified 2026-10-23]*, and app mode, the account's message-access setting and the access level are named as possible causes, not verified ones |
+| `instagram_get_messages` | RO | `GET /{conversation-id}?fields=messages`, then `GET /{message-id}?fields=id,created_time,from,to,message` per message (`limit` 1–20). `conversation_id` takes the messaging id rule, not the 64-character Graph one: Instagram Login conversation and message ids are opaque base64url-style blobs of ~100–150 characters, so it admits 1–512 characters of letters, digits, `_`, `-` and `=` (`tools/ids.ts` `messagingObjectId`). Only the **20 most recent** messages of a conversation are readable *[verified 2026-10-23]*; a message whose detail read fails with a non-credential error keeps `id`/`created_time` and is marked `detailsUnavailable`. Message text and usernames are fenced |
 
 ## Structured output
 
@@ -244,7 +250,7 @@ it; the v2 client skips that check, but v1 clients are still in the field
 
 ## Tool-count budget
 
-Initial surface: **29 tools** across 6 packages — deliberately compact; every tool
+Initial surface: **31 tools** across 7 packages — deliberately compact; every tool
 earns its context-window cost. Composites (`post_image`, `post_reel`, `post_story`)
 exist because the container flow is a multi-step protocol the model otherwise gets
 wrong; the primitive tools remain exposed for advanced control.
