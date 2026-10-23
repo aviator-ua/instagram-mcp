@@ -237,6 +237,18 @@ const CASES: LogCase[] = [
     args: { username: 'competitor', mediaLimit: 5 },
     expect: { username: 'competitor', mediaLimit: 5 },
   },
+
+  // --- messaging -----------------------------------------------------------
+  {
+    name: 'instagram_list_conversations',
+    args: { limit: 25, after: 'CURSOR' },
+    expect: { limit: 25, fetchAll: false, hasCursor: true },
+  },
+  {
+    name: 'instagram_get_messages',
+    args: { conversation_id: 'T1', limit: 5 },
+    expect: { conversation_id: 'T1', limit: 5 },
+  },
 ];
 
 /** Tools that deliberately declare no `logFields` (their input carries nothing worth logging). */

@@ -87,6 +87,7 @@ const ID_FIELDS: readonly (readonly [string, string])[] = [
   ['instagram_delete_comment', 'commentId'],
   ['instagram_set_comments_enabled', 'mediaId'],
   ['instagram_get_hashtag_media', 'hashtagId'],
+  ['instagram_get_messages', 'conversation_id'],
 ];
 
 /**
