@@ -1,8 +1,9 @@
 /**
  * `instagram_get_story_history` — a Worker-only, read-only tool over the Story
- * snapshots the hourly cron stores in D1 (`story-snapshots.ts`). It answers
- * what the Graph API no longer can once a Story has expired: its last known
- * views, reach, replies, shares, interactions and navigation.
+ * snapshots the cron stores in D1 every 15 minutes (`story-snapshots.ts`). It
+ * answers what the Graph API no longer can once a Story has expired: its last
+ * known views, reach, replies, shares, interactions and navigation, and, on
+ * request, how they grew capture by capture.
  *
  * Registered only when the Worker has a `STORY_DB` binding.
  */
@@ -10,7 +11,13 @@ import { z } from 'zod';
 import { defineTool, type ToolSpec } from '../mcp/define.js';
 import { json } from '../mcp/result.js';
 import { InstagramError } from '../core/types.js';
-import { isoOrUndefined, latestSnapshots, type D1Like } from './story-store.js';
+import {
+  isoOrUndefined,
+  latestSnapshots,
+  snapshotSeries,
+  type D1Like,
+  type SeriesPoint,
+} from './story-store.js';
 
 /** The registry package tag of the history tool. */
 export const STORY_HISTORY_PACKAGE = 'story_history';
@@ -19,10 +26,19 @@ const DEFAULT_LIMIT = 20;
 
 /** What every answer says about where the numbers come from. */
 export const STORY_HISTORY_NOTE =
-  'Metrics are the last hourly snapshot taken while the Story was live, so they can trail the ' +
-  'final numbers by up to an hour. Stories that expired before snapshots began, or while the ' +
+  'Metrics are the last snapshot taken while the Story was live (one every 15 minutes), so they ' +
+  'can trail the final numbers by up to 15 minutes. Stories that expired before snapshots began, or while the ' +
   'Worker could not reach Instagram, are not here. A metric listed in missingMetrics had no ' +
   "value in Instagram's answer; it is absent, not zero.";
+
+const seriesPointOutput = z
+  .object({
+    capturedAt: z.string(),
+    metrics: z.record(z.string(), z.number()),
+    missingMetrics: z.array(z.string()).optional(),
+    error: z.string().optional(),
+  })
+  .strict();
 
 const storyOutput = z
   .object({
@@ -35,8 +51,17 @@ const storyOutput = z
     metrics: z.record(z.string(), z.number()),
     missingMetrics: z.array(z.string()).optional(),
     error: z.string().optional(),
+    series: z.array(seriesPointOutput).optional(),
   })
   .strict();
+
+/** A series point as the tool returns it: missing metrics and error only when present. */
+function seriesPoint(point: SeriesPoint): Record<string, unknown> {
+  const out: Record<string, unknown> = { capturedAt: point.capturedAt, metrics: point.metrics };
+  if (point.missing.length > 0) out.missingMetrics = point.missing;
+  if (point.error !== undefined) out.error = point.error;
+  return out;
+}
 
 /** Build the tool over a D1 database. */
 export function storyHistoryTool(db: D1Like): ToolSpec {
@@ -45,11 +70,14 @@ export function storyHistoryTool(db: D1Like): ToolSpec {
     title: 'Get Story history',
     description:
       'Insights of past Stories, including expired ones, from the snapshots this server takes ' +
-      'every hour while a Story is live (Instagram serves Story insights only for the 24 hours a ' +
+      'every 15 minutes while a Story is live (Instagram serves Story insights only for the 24 hours a ' +
       'Story is up). Newest Story first. Each entry has the Story id, when it was posted, its ' +
       'last captured metrics (views, reach, replies, shares, total_interactions, navigation, … ' +
       'as Instagram returned them), how many snapshots exist, and missingMetrics for metrics ' +
-      'Instagram did not return — absent, not zero. Use instagram_list_stories and ' +
+      'Instagram did not return — absent, not zero. With includeSeries=true each Story also ' +
+      'carries series: every snapshot, oldest first, to see how the metrics grew over the ' +
+      "Story's 24 hours (up to ~96 points per Story, so keep limit small). Use " +
+      'instagram_list_stories and ' +
       'instagram_get_media_insights for Stories that are live right now.',
     package: STORY_HISTORY_PACKAGE,
     paths: ['ig-login'],
@@ -69,12 +97,23 @@ export function storyHistoryTool(db: D1Like): ToolSpec {
         .max(100)
         .optional()
         .describe(`How many Stories to return (1–100, default ${DEFAULT_LIMIT}).`),
+      includeSeries: z
+        .boolean()
+        .optional()
+        .describe(
+          "Also return each Story's full series of snapshots (one every 15 minutes, oldest " +
+            'first). Default false: only the last snapshot.',
+        ),
     },
     output: {
       stories: z.array(storyOutput),
       note: z.string(),
     },
-    logFields: (args) => ({ since: args.since, limit: args.limit }),
+    logFields: (args) => ({
+      since: args.since,
+      limit: args.limit,
+      includeSeries: args.includeSeries,
+    }),
     handler: async (args, ctx) => {
       const since = args.since === undefined ? undefined : isoOrUndefined(args.since);
       if (args.since !== undefined && since === undefined) {
@@ -83,6 +122,13 @@ export function storyHistoryTool(db: D1Like): ToolSpec {
         });
       }
       const rows = await latestSnapshots(db, { since, limit: args.limit ?? DEFAULT_LIMIT });
+      const series =
+        args.includeSeries === true
+          ? await snapshotSeries(
+              db,
+              rows.map((row) => row.storyId),
+            )
+          : undefined;
       const stories = rows.map((row) => {
         const story: Record<string, unknown> = {
           id: row.storyId,
@@ -95,6 +141,14 @@ export function storyHistoryTool(db: D1Like): ToolSpec {
         if (row.permalink !== undefined) story.permalink = row.permalink;
         if (row.missing.length > 0) story.missingMetrics = row.missing;
         if (row.error !== undefined) story.error = row.error;
+        if (series !== undefined) {
+          // Every listed Story has at least the capture it was listed from;
+          // the fallback only satisfies the Map's optional get.
+          const points =
+            /* c8 ignore next */
+            series.get(row.storyId) ?? [];
+          story.series = points.map(seriesPoint);
+        }
         return story;
       });
       return json({ stories, note: STORY_HISTORY_NOTE }, { pretty: ctx.settings.prettyJson });

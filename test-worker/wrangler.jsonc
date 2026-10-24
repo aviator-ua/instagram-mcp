@@ -15,5 +15,5 @@
       "database_id": "runtime-test-d1",
     },
   ],
-  "triggers": { "crons": ["17 * * * *"] },
+  "triggers": { "crons": ["*/15 * * * *"] },
 }

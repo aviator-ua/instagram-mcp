@@ -2,9 +2,10 @@
  * Story snapshot storage in Cloudflare D1.
  *
  * Instagram serves a Story, and its insights, only while it is live (24 h).
- * The hourly cron (`story-snapshots.ts`) copies each live Story's metrics here,
+ * The cron (`story-snapshots.ts`, every 15 minutes) copies each live Story's metrics here,
  * so they can still be read after the Story is gone. One row per Story per
- * capture; the newest row of a Story is its last known state.
+ * capture; the newest row of a Story is its last known state, and all of its
+ * rows in capture order are its series.
  *
  * Metrics are stored normalized — `{ name: number }` for every metric Instagram
  * returned a readable number for, plus the names it did not (`missing`) — so a
@@ -115,6 +116,19 @@ interface SnapshotRecord {
   snapshots: number;
 }
 
+/** One point of a Story's series: a capture's time and what it read. */
+export interface SeriesPoint {
+  capturedAt: string;
+  metrics: Record<string, number>;
+  missing: string[];
+  error?: string;
+}
+
+type SeriesRecord = Pick<
+  SnapshotRecord,
+  'story_id' | 'captured_at' | 'metrics' | 'missing' | 'error'
+>;
+
 /** Parse a stored JSON column, tolerating a row written by hand or by an older version. */
 function parseJson<T>(text: string, fallback: T, valid: (value: unknown) => value is T): T {
   try {
@@ -175,4 +189,39 @@ export async function latestSnapshots(
     .bind(params.since ?? null, params.limit)
     .all<SnapshotRecord>();
   return results.map(toRow);
+}
+
+/**
+ * Every capture of the given Stories, oldest first, keyed by Story id. A Story
+ * with no captures is absent from the map. At most 100 ids (the tool's `limit`
+ * cap), inside D1's bound-parameter limit.
+ */
+export async function snapshotSeries(
+  db: D1Like,
+  storyIds: readonly string[],
+): Promise<Map<string, SeriesPoint[]>> {
+  const series = new Map<string, SeriesPoint[]>();
+  if (storyIds.length === 0) return series;
+  const placeholders = storyIds.map(() => '?').join(', ');
+  const { results } = await db
+    .prepare(
+      `SELECT story_id, captured_at, metrics, missing, error
+         FROM story_snapshots
+        WHERE story_id IN (${placeholders})
+        ORDER BY story_id, captured_at`,
+    )
+    .bind(...storyIds)
+    .all<SeriesRecord>();
+  for (const record of results) {
+    const point: SeriesPoint = {
+      capturedAt: record.captured_at,
+      metrics: parseJson(record.metrics, {}, isNumberRecord),
+      missing: parseJson(record.missing, [], isStringArray),
+    };
+    if (record.error !== null) point.error = record.error;
+    const points = series.get(record.story_id);
+    if (points === undefined) series.set(record.story_id, [point]);
+    else points.push(point);
+  }
+  return series;
 }

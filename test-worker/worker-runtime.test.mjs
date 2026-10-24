@@ -189,8 +189,8 @@ test('reads account insights without a configured account id', async () => {
   assert.equal(result.structuredContent.metrics[0].total_value.value, 1200);
 });
 
-test('the hourly cron snapshots live Stories into D1 for instagram_get_story_history', async () => {
-  const run = await server.getWorker().scheduled({ cron: '17 * * * *' });
+test('the 15-minute cron snapshots live Stories into D1 for instagram_get_story_history', async () => {
+  const run = await server.getWorker().scheduled({ cron: '*/15 * * * *' });
   assert.equal(run.outcome, 'ok');
 
   const result = await callTool('instagram_get_story_history', {});

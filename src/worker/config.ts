@@ -33,7 +33,7 @@ export interface WorkerEnv {
   IG_PRETTY_JSON?: string;
   /** KV namespace the OAuth provider keeps clients, grants and tokens in. */
   OAUTH_KV?: unknown;
-  /** Optional D1 database for hourly Story snapshots (`instagram_get_story_history`). */
+  /** Optional D1 database for 15-minute Story snapshots (`instagram_get_story_history`). */
   STORY_DB?: D1Like;
 }
 

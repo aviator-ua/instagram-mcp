@@ -1,6 +1,6 @@
 /**
  * Story snapshots: the D1 store (run against real SQLite through
- * `test/helpers/sqlite-d1.ts`), the hourly snapshot job with Graph faked
+ * `test/helpers/sqlite-d1.ts`), the 15-minute snapshot job with Graph faked
  * through the `fetchImpl` seam, the `instagram_get_story_history` tool over the
  * MCP handler, and the Worker's `scheduled` entry. Offline by construction.
  */
@@ -13,6 +13,7 @@ import {
   isoOrUndefined,
   latestSnapshots,
   saveSnapshots,
+  snapshotSeries,
   type D1Like,
   type StorySnapshot,
 } from '../../src/worker/story-store.js';
@@ -134,6 +135,39 @@ test('since and limit narrow the history', async () => {
     limited.map((row) => row.storyId),
     ['new'],
   );
+});
+
+test('the series of each requested Story lists every capture, oldest first', async () => {
+  const db = sqliteD1();
+  await ensureSchema(db);
+  const firstAt = '2026-10-23T11:45:00.000Z';
+  await saveSnapshots(db, [
+    snapshot({ metrics: { views: 30 } }),
+    snapshot({ capturedAt: firstAt, metrics: { views: 12 }, missing: ['replies'] }),
+    snapshot({ storyId: STORY_FAILING, metrics: {}, error: 'upstream: boom' }),
+    snapshot({ storyId: 'not-asked-for' }),
+  ]);
+
+  const series = await snapshotSeries(db, [STORY_LIVE, STORY_FAILING, 'never-captured']);
+  const none = await snapshotSeries(db, []);
+
+  assert.deepEqual(
+    [...series.entries()],
+    [
+      [
+        STORY_LIVE,
+        [
+          { capturedAt: firstAt, metrics: { views: 12 }, missing: ['replies'] },
+          { capturedAt: TARGET_CAPTURED_AT, metrics: { views: 30 }, missing: [] },
+        ],
+      ],
+      [
+        STORY_FAILING,
+        [{ capturedAt: TARGET_CAPTURED_AT, metrics: {}, missing: [], error: 'upstream: boom' }],
+      ],
+    ],
+  );
+  assert.equal(none.size, 0);
 });
 
 test('a stored row with unreadable JSON reads back as no metrics rather than failing', async () => {
@@ -399,6 +433,44 @@ test('the history tool returns the stored Stories with the provenance note', asy
     since.structuredContent.stories.map((s: { id: string }) => s.id),
     [STORY_LIVE],
   );
+});
+
+test("the history tool returns each Story's series only when includeSeries is set", async () => {
+  const db = sqliteD1();
+  await ensureSchema(db);
+  const firstAt = '2026-10-23T11:45:00.000Z';
+  await saveSnapshots(db, [
+    snapshot({ capturedAt: firstAt, metrics: { views: 12 }, missing: ['replies'] }),
+    snapshot({ metrics: { views: 30 }, error: 'upstream: boom' }),
+  ]);
+  const env: WorkerEnv = { ...ENV, STORY_DB: db };
+
+  const withSeries = await result(
+    await handleMcpRequest(
+      rpc('tools/call', {
+        name: 'instagram_get_story_history',
+        arguments: { includeSeries: true },
+      }),
+      env,
+      quietDeps(),
+    ),
+  );
+  const withoutSeries = await result(
+    await handleMcpRequest(
+      rpc('tools/call', { name: 'instagram_get_story_history', arguments: {} }),
+      env,
+      quietDeps(),
+    ),
+  );
+
+  assert.notEqual(withSeries.isError, true, JSON.stringify(withSeries.content));
+  const [story] = withSeries.structuredContent.stories;
+  assert.equal(story.snapshots, 2);
+  assert.deepEqual(story.series, [
+    { capturedAt: firstAt, metrics: { views: 12 }, missingMetrics: ['replies'] },
+    { capturedAt: TARGET_CAPTURED_AT, metrics: { views: 30 }, error: 'upstream: boom' },
+  ]);
+  assert.equal(withoutSeries.structuredContent.stories[0].series, undefined);
 });
 
 test('the history tool refuses a since that is not a date', async () => {
