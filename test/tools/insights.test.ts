@@ -192,6 +192,7 @@ test('each tool declares exactly the arguments its handler forwards', () => {
     'until',
   ]);
   assert.deepEqual(keys('instagram_get_media_insights'), [
+    'breakdown',
     'media_id',
     'media_product_type',
     'metrics',
@@ -678,6 +679,105 @@ test('media insights forwards an explicit metric selection and passes its own ou
   assert.equal((parsed as { mediaId: string }).mediaId, 'm2');
 });
 
+test('reel watch-time rows are marked milliseconds; count rows carry no unit', async () => {
+  // Graph sends a duration as a bare number beside the counts. The unit is ours:
+  // a wire `unit` is replaced on a duration row and removed from a count row, and
+  // the value itself is never converted.
+  const wire = {
+    data: [
+      { name: 'views', period: 'lifetime', values: [{ value: 120 }], unit: 'seconds' },
+      { name: 'ig_reels_avg_watch_time', period: 'lifetime', values: [{ value: 6243 }] },
+      {
+        name: 'ig_reels_video_view_total_time',
+        period: 'lifetime',
+        values: [{ value: 749160 }],
+        unit: 'minutes',
+      },
+    ],
+  };
+  const { ctx, calls } = makeCtx({ response: wire });
+  const spec = toolByName('instagram_get_media_insights');
+
+  const res = await spec.handler({ media_id: 'r1', media_product_type: 'REELS' }, ctx);
+
+  assert.equal(
+    calls[0]?.params?.metric,
+    'views,reach,likes,comments,saved,shares,total_interactions,' +
+      'ig_reels_avg_watch_time,ig_reels_video_view_total_time',
+  );
+  const sc = res.structuredContent as { metrics: Record<string, unknown>[] };
+  assert.deepEqual(sc.metrics, [
+    { name: 'views', period: 'lifetime', values: [{ value: 120 }] },
+    {
+      name: 'ig_reels_avg_watch_time',
+      period: 'lifetime',
+      values: [{ value: 6243 }],
+      unit: 'milliseconds',
+    },
+    {
+      name: 'ig_reels_video_view_total_time',
+      period: 'lifetime',
+      values: [{ value: 749160 }],
+      unit: 'milliseconds',
+    },
+  ]);
+  z.object(spec.output ?? {}).parse(res.structuredContent);
+});
+
+test('a story navigation breakdown reaches the caller with its four buckets', async () => {
+  const breakdowns = [
+    {
+      dimension_keys: ['story_navigation_action_type'],
+      results: [
+        { dimension_values: ['tap_forward'], value: 19 },
+        { dimension_values: ['tap_back'], value: 4 },
+        { dimension_values: ['tap_exit'], value: 1 },
+        { dimension_values: ['swipe_forward'], value: 1 },
+      ],
+    },
+  ];
+  const wire = {
+    data: [
+      {
+        name: 'navigation',
+        period: 'lifetime',
+        values: [{ value: 25 }],
+        total_value: { value: 25, breakdowns },
+      },
+    ],
+  };
+  const { ctx, calls } = makeCtx({ response: wire });
+  const spec = toolByName('instagram_get_media_insights');
+
+  const res = await spec.handler(
+    { media_id: 's1', media_product_type: 'STORY', breakdown: 'story_navigation_action_type' },
+    ctx,
+  );
+
+  assert.deepEqual(calls[0]?.params, {
+    metric: 'navigation',
+    breakdown: 'story_navigation_action_type',
+  });
+  assert.deepEqual(res.structuredContent, {
+    mediaId: 's1',
+    metrics: wire.data,
+    breakdown: 'story_navigation_action_type',
+  });
+  z.object(spec.output ?? {}).parse(res.structuredContent);
+});
+
+test('media insights input accepts only the story navigation breakdown', () => {
+  const schema = strictInput(toolByName('instagram_get_media_insights'));
+  const base = { media_id: 'm1' };
+  assert.equal(
+    schema.safeParse({ ...base, breakdown: 'story_navigation_action_type' }).success,
+    true,
+  );
+  for (const breakdown of ['action_type', 'country', 'STORY_NAVIGATION_ACTION_TYPE']) {
+    assert.equal(schema.safeParse({ ...base, breakdown }).success, false, breakdown);
+  }
+});
+
 test('media insights with no rows is an empty result, not an error', async () => {
   // Insights on media created before the account went professional, or on an
   // expired story, come back without a `data` array at all.
@@ -1101,15 +1201,18 @@ test('media insights describes the product-type dependency and the empty-answer 
   // used to come back as a client-side refusal.
   assertMentions(
     metrics,
-    'Defaults to the set valid for the media: views, reach, likes, comments, saved, shares, ' +
-      'total_interactions for a feed post or a reel, and views, reach, replies, shares, ' +
-      'total_interactions, navigation when media_product_type is STORY.',
+    'Defaults to the set for the media: views, reach, likes, comments, saved, shares, ' +
+      'total_interactions for a feed post; the same plus ig_reels_avg_watch_time, ' +
+      'ig_reels_video_view_total_time when media_product_type is REELS; and views, reach, ' +
+      'replies, shares, total_interactions, navigation when media_product_type is STORY.',
   );
   assertMentions(metrics, 'An absent or unrecognized media_product_type gets the feed set.');
   assertMentions(
     metrics,
-    'Validity depends on the media type: "navigation" and "replies" are story-only and are ' +
-      'refused for feed posts and reels.',
+    'Validity depends on the media type: "navigation" and "replies" are story-only; ' +
+      'ig_reels_avg_watch_time and ig_reels_video_view_total_time are reel-only and in ' +
+      'milliseconds; follows, profile_visits and profile_activity are for feed posts and ' +
+      'stories. A metric invalid for the stated type is refused.',
   );
 
   const hint = describeOf(spec.input, 'media_product_type');
@@ -1277,6 +1380,14 @@ const PUBLISHED_METRIC_ROW = {
       items: { type: 'object', additionalProperties: {}, propertyNames: { type: 'string' } },
     },
     total_value: { type: 'object', additionalProperties: {}, propertyNames: { type: 'string' } },
+    unit: {
+      type: 'string',
+      const: 'milliseconds',
+      description:
+        'Set on the reel watch-time metrics (ig_reels_avg_watch_time, ' +
+        'ig_reels_video_view_total_time): their values are durations in milliseconds, ' +
+        'passed through unconverted. Absent on count metrics.',
+    },
     omittedValues: {
       type: 'integer',
       minimum: Number.MIN_SAFE_INTEGER,
@@ -1456,7 +1567,10 @@ const PUBLISHED_CONTRACT: Record<string, unknown> = {
     description:
       'Insights for a single media object (GET /{media-id}/insights). The valid metric set ' +
       'varies by media_product_type; supply media_product_type to have invalid combinations ' +
-      'rejected client-side. Insights on media created before the account became professional, ' +
+      "rejected client-side. A reel's default set includes ig_reels_avg_watch_time and " +
+      'ig_reels_video_view_total_time, whose values are milliseconds (marked unit: ' +
+      '"milliseconds" on the row). A story\'s navigation can be split by breakdown ' +
+      'story_navigation_action_type. Insights on media created before the account became professional, ' +
       'or on an expired story, may return empty or error. A requested metric Instagram ' +
       'returned no data for is listed in missingMetrics and explained in note; it is absent, ' +
       'not zero.',
@@ -1485,15 +1599,24 @@ const PUBLISHED_CONTRACT: Record<string, unknown> = {
               'total_interactions',
               'navigation',
               'replies',
+              'follows',
+              'profile_visits',
+              'profile_activity',
+              'ig_reels_avg_watch_time',
+              'ig_reels_video_view_total_time',
             ],
           },
           description:
-            'Media metrics to fetch. Defaults to the set valid for the media: views, reach, ' +
-            'likes, comments, saved, shares, total_interactions for a feed post or a reel, and ' +
-            'views, reach, replies, shares, total_interactions, navigation when ' +
+            'Media metrics to fetch. Defaults to the set for the media: views, reach, likes, ' +
+            'comments, saved, shares, total_interactions for a feed post; the same plus ' +
+            'ig_reels_avg_watch_time, ig_reels_video_view_total_time when media_product_type is ' +
+            'REELS; and views, reach, replies, shares, total_interactions, navigation when ' +
             'media_product_type is STORY. An absent or unrecognized media_product_type gets the ' +
-            'feed set. Validity depends on the media type: "navigation" and "replies" are ' +
-            'story-only and are refused for feed posts and reels.',
+            'feed set. With breakdown it defaults to navigation. Validity depends on the media ' +
+            'type: "navigation" and "replies" are story-only; ig_reels_avg_watch_time and ' +
+            'ig_reels_video_view_total_time are reel-only and in milliseconds; follows, ' +
+            'profile_visits and profile_activity are for feed posts and stories. A metric ' +
+            'invalid for the stated type is refused.',
         },
         media_product_type: {
           type: 'string',
@@ -1502,6 +1625,16 @@ const PUBLISHED_CONTRACT: Record<string, unknown> = {
             'instagram_get_media). When supplied and recognized, it selects the default metric ' +
             'set for that type and invalid metric/type combinations are refused before the ' +
             'call is spent.',
+        },
+        breakdown: {
+          type: 'string',
+          enum: ['story_navigation_action_type'],
+          description:
+            'Optional story breakdown. "story_navigation_action_type" splits a story\'s ' +
+            'navigation count into tap_forward, tap_back, tap_exit and swipe_forward (in ' +
+            'total_value.breakdowns). Story-only and valid with the navigation metric alone: ' +
+            'Instagram rejects the whole request when any other metric is named beside it, so ' +
+            'other metrics are refused client-side.',
         },
       },
       required: ['media_id'],
@@ -1512,6 +1645,7 @@ const PUBLISHED_CONTRACT: Record<string, unknown> = {
       properties: {
         mediaId: { type: 'string' },
         metrics: { type: 'array', items: PUBLISHED_METRIC_ROW },
+        breakdown: { type: 'string' },
         missingMetrics: { type: 'array', items: { type: 'string' } },
         note: { type: 'string' },
       },

@@ -1,0 +1,22 @@
+// Cloudflare Workers configuration for the remote, read-only Instagram MCP server.
+// See docs/cloudflare-workers.md for the full deployment guide.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "instagram-mcp",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-10-01",
+  // node:crypto, node:async_hooks and friends are used by the shared core layer.
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "vars": {
+    // Public origin of this Worker (no path). It becomes the OAuth issuer and the
+    // resource identifier `<origin>/mcp`, so it must match the URL clients use.
+    "MCP_PUBLIC_URL": "https://instagram-mcp.YOUR-SUBDOMAIN.workers.dev",
+    "IG_LOG_LEVEL": "info",
+  },
+  // OAuth clients, grants and tokens (stored hashed / encrypted by the provider).
+  // Create it with `npx wrangler kv namespace create OAUTH_KV` and paste the id.
+  "kv_namespaces": [{ "binding": "OAUTH_KV", "id": "REPLACE_WITH_YOUR_KV_NAMESPACE_ID" }],
+  // Secrets (never in this file): INSTAGRAM_ACCESS_TOKEN, MCP_OWNER_PASSWORD and,
+  // optionally, MCP_STATIC_BEARER_TOKEN — set with `npx wrangler secret put <NAME>`.
+}

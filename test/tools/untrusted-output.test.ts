@@ -214,6 +214,9 @@ function argsFor(name: string, apply: boolean): Record<string, unknown> {
     if (key in BASE_ARGS) args[key] = BASE_ARGS[key];
   }
   if (name === 'instagram_post_story') delete args.videoUrl;
+  // `breakdown: 'country'` is the demographics dimension; get_media_insights'
+  // `breakdown` takes a different vocabulary and is not free text.
+  if (name === 'instagram_get_media_insights') delete args.breakdown;
   if ('apply' in spec.input) args.apply = apply;
   if (spec.paths?.includes('fb-login') === false) args.account = igProfile.name;
   return args;

@@ -1016,12 +1016,14 @@ test('a disallowed host is refused before the auth provider ever sees it', async
   assert.deepEqual(seen, ['graph.facebook.com']);
 });
 
-test('the transport is told to refuse redirects, not follow them', async () => {
+test('the transport is told not to follow redirects', async () => {
   // The allowlist is enforced on the URL this module builds. A 3xx hands the
   // choice of the NEXT host to whoever answered — following it would open a
   // socket to an address no gate ever saw, which is exactly the cross-host
-  // redirect docs/security.md §3 refuses. `redirect: 'error'` on the fetch init
-  // is the only place that policy can be enforced at the transport.
+  // redirect docs/security.md §3 refuses. `redirect: 'manual'` keeps the
+  // transport from following; `redirect: 'error'` would say the same on Node,
+  // but the Workers runtime rejects that mode outright, so the refusal itself is
+  // made by the seam (the two tests below).
   const { fetchImpl, calls } = mockFetch(() => ({ body: {} }));
   const req = createIgRequest({
     auth: igAuth,
@@ -1032,7 +1034,62 @@ test('the transport is told to refuse redirects, not follow them', async () => {
   });
   await req({ method: 'GET', path: '/me' });
   await req({ method: 'POST', path: '/123/media', body: { caption: 'hi' } });
-  for (const call of calls) assert.equal(call.redirect, 'error', call.url);
+  for (const call of calls) assert.equal(call.redirect, 'manual', call.url);
+});
+
+test('a 3xx answer is refused, never followed and never retried', async () => {
+  // Node's fetch hands a `manual` redirect back as the 3xx response itself. It
+  // is refused as an upstream error naming the host, on a GET too: a retry would
+  // get the same redirect, so the one call is the only call.
+  const { fetchImpl, calls } = mockFetch(() => ({
+    status: 302,
+    body: {},
+    headers: { location: 'https://evil.example.com/steal' },
+  }));
+  const req = createIgRequest({
+    auth: igAuth,
+    settings: s(),
+    clock: recordingClock(),
+    log: testLogger(),
+    fetchImpl,
+  });
+  await assert.rejects(
+    () => req({ method: 'GET', path: '/me' }),
+    (e: unknown) =>
+      isInstagramError(e) &&
+      e.kind === 'upstream' &&
+      e.status === 302 &&
+      e.message ===
+        'Refusing to follow a redirect from graph.instagram.com; Graph API calls never follow redirects.',
+  );
+  assert.equal(calls.length, 1);
+  assert.ok(calls.every((call) => !call.url.includes('evil.example.com')));
+});
+
+test('an opaque redirect (the browser-style manual answer) is refused without a status', async () => {
+  // A fetch that implements `manual` the way the Fetch standard does answers
+  // with `type: 'opaqueredirect'`, status 0 and no body. There is no real status
+  // to report, so none is.
+  const opaque = Object.defineProperties(new Response(null), {
+    type: { value: 'opaqueredirect' },
+    status: { value: 0 },
+  });
+  let calls = 0;
+  const req = createIgRequest({
+    auth: igAuth,
+    settings: s(),
+    clock: recordingClock(),
+    log: testLogger(),
+    fetchImpl: () => {
+      calls += 1;
+      return Promise.resolve(opaque);
+    },
+  });
+  await assert.rejects(
+    () => req({ method: 'GET', path: '/me' }),
+    (e: unknown) => isInstagramError(e) && e.kind === 'upstream' && e.status === undefined,
+  );
+  assert.equal(calls, 1);
 });
 
 // --- http.ts: retry matrix --------------------------------------------------

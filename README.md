@@ -216,6 +216,9 @@ before any configuration is read — it never starts the server by accident.
   process can call every tool, writes included. It is allowed on loopback and
   logged at error level on startup; binding a non-loopback address without a token
   is refused outright, and a blank token is refused either way.
+- **Remote (Cloudflare Workers)** — a read-only deployment of the same tools behind
+  OAuth 2.1, for ChatGPT custom connectors and other remote MCP clients. See
+  [docs/cloudflare-workers.md](docs/cloudflare-workers.md).
 
 ## Write safety
 
@@ -403,6 +406,7 @@ client that supports MCP elicitation is asked to confirm each applied write.
 | [docs/auth.md](docs/auth.md) | The two Instagram auth paths, token types & lifetimes, scopes, app setup |
 | [docs/tools.md](docs/tools.md) | Full tool catalog specification (names, annotations, inputs, Graph calls) |
 | [docs/setup-guide.md](docs/setup-guide.md) | End-to-end setup walkthrough |
+| [docs/cloudflare-workers.md](docs/cloudflare-workers.md) | Remote read-only deployment on Cloudflare Workers: OAuth, ChatGPT connector, deploy, troubleshooting |
 | [docs/troubleshooting.md](docs/troubleshooting.md) | Common failures and fixes |
 | [docs/security.md](docs/security.md) | Token storage, redaction, SSRF policy, write safety, supply chain |
 | [docs/operations.md](docs/operations.md) | Rate limits, retry/backoff, pagination, error taxonomy, versioning |

@@ -924,8 +924,9 @@ IG_TOOL_PACKAGES=account,media,insights</code></pre>
           <summary><code>instagram_get_media_insights</code> <span class="pill ro">read</span><span class="tool-sum">Insights for one media object. The valid metric set depends on the media product type.</span></summary>
           <div class="tool-params"><table><thead><tr><th>Parameter</th><th>Type</th><th></th><th>Notes</th></tr></thead><tbody>
             <tr><td><code>media_id</code></td><td>string</td><td><span class="req">required</span></td><td>The media object to measure.</td></tr>
-            <tr><td><code>metrics</code></td><td>enum[]</td><td><span class="opt">optional</span></td><td>Defaults to views, reach, likes, comments, saved, shares, total_interactions. <code>navigation</code>/<code>replies</code> are story-only.</td></tr>
+            <tr><td><code>metrics</code></td><td>enum[]</td><td><span class="opt">optional</span></td><td>Defaults to views, reach, likes, comments, saved, shares, total_interactions; reels add <code>ig_reels_avg_watch_time</code> and <code>ig_reels_video_view_total_time</code> (milliseconds). <code>navigation</code>/<code>replies</code> are story-only.</td></tr>
             <tr><td><code>media_product_type</code></td><td>string</td><td><span class="opt">optional</span></td><td>Hint (FEED / REELS / STORY) to reject invalid metric combinations client-side.</td></tr>
+            <tr><td><code>breakdown</code></td><td>enum</td><td><span class="opt">optional</span></td><td><code>story_navigation_action_type</code>: split a story's <code>navigation</code> into tap forward / back / exit / swipe forward. Valid with <code>navigation</code> alone.</td></tr>
           </tbody></table></div>
         </details>
         <details class="tool">

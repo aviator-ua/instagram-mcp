@@ -44,6 +44,10 @@
     "test": "node --test \"dist/**/*.test.js\"",
     "test:corpus": "node scripts/assert-test-corpus.mjs",
     "test:full": "npm run build && npm run test:corpus && npm test",
+    "test:worker": "node --test \"test-worker/*.test.mjs\"",
+    "build:worker": "wrangler deploy --dry-run --outdir .wrangler/dist",
+    "dev:worker": "wrangler dev",
+    "deploy:worker": "wrangler deploy",
     "coverage": "c8 --all --include='dist/src/**/*.js' --include='dist/test/helpers/**/*.js' --include='bin/**/*.cjs' --reporter=text --reporter=lcov --check-coverage --statements=100 --branches=100 --functions=100 --lines=100 npm test",
     "audit": "npm audit --audit-level=high --omit=dev",
     "audit:dev": "npm audit --audit-level=high",
@@ -59,6 +63,7 @@
     "zod": "^4.2.0"
   },
   "devDependencies": {
+    "@cloudflare/workers-oauth-provider": "^1.2.3",
     "@eslint/js": "^10.0.1",
     "@modelcontextprotocol/client": "^2.3.1",
     "@modelcontextprotocol/core": "^2.3.1",
@@ -67,9 +72,11 @@
     "eslint": "^10.8.0",
     "eslint-config-prettier": "^10.1.8",
     "fast-check": "^4.9.0",
+    "miniflare": "5.20261006.1-alpha",
     "prettier": "^3.3.0",
     "typescript": "^5.6.0",
-    "typescript-eslint": "^8.0.0"
+    "typescript-eslint": "^8.0.0",
+    "wrangler": "^4.149.0"
   },
   "keywords": [
     "mcp",
