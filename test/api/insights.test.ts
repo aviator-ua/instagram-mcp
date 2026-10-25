@@ -13,6 +13,8 @@ import {
   DEMOGRAPHIC_BREAKDOWNS,
   DEMOGRAPHIC_METRICS,
   DEMOGRAPHIC_TIMEFRAMES,
+  MEDIA_BREAKDOWNS,
+  MEDIA_DEFAULT_METRICS_BY_TYPE,
   MEDIA_METRICS,
   MEDIA_METRIC_MATRIX,
   METRIC_TYPES,
@@ -133,20 +135,56 @@ test('the media metric vocabularies match the per-product-type matrix (CC-INS-2)
       'total_interactions',
       'navigation',
       'replies',
+      'follows',
+      'profile_visits',
+      'profile_activity',
+      'ig_reels_avg_watch_time',
+      'ig_reels_video_view_total_time',
     ],
   );
   assert.deepEqual(
     [...DEFAULT_MEDIA_METRICS],
     ['views', 'reach', 'likes', 'comments', 'saved', 'shares', 'total_interactions'],
   );
+  // Validity per Meta's media-insights metrics table (verified 2026-10-23).
+  const feedCounts = ['views', 'reach', 'likes', 'comments', 'saved', 'shares'];
+  const watchTime = ['ig_reels_avg_watch_time', 'ig_reels_video_view_total_time'];
+  const profile = ['follows', 'profile_visits', 'profile_activity'];
+  const storyRow = ['views', 'reach', 'replies', 'shares', 'total_interactions', 'navigation'];
   assert.deepEqual(
     { ...MEDIA_METRIC_MATRIX },
     {
-      FEED: ['views', 'reach', 'likes', 'comments', 'saved', 'shares', 'total_interactions'],
-      REELS: ['views', 'reach', 'likes', 'comments', 'saved', 'shares', 'total_interactions'],
-      STORY: ['views', 'reach', 'replies', 'shares', 'total_interactions', 'navigation'],
+      FEED: [...feedCounts, 'total_interactions', ...profile],
+      REELS: [...feedCounts, 'total_interactions', ...watchTime],
+      STORY: [...storyRow, ...profile],
     },
   );
+  // What a bare call asks for: FEED and STORY unchanged by the vocabulary
+  // widening, REELS gains the watch-time pair.
+  assert.deepEqual(
+    { ...MEDIA_DEFAULT_METRICS_BY_TYPE },
+    {
+      FEED: [...feedCounts, 'total_interactions'],
+      REELS: [...feedCounts, 'total_interactions', ...watchTime],
+      STORY: storyRow,
+    },
+  );
+  assert.deepEqual([...MEDIA_BREAKDOWNS], ['story_navigation_action_type']);
+});
+
+test('every default row is a subset of the validity row for its type', () => {
+  // A default the matrix refuses would turn the bare "insights for this reel"
+  // call into a client-side refusal of a request the caller never made — the
+  // CC-INS-14 defect over again.
+  assert.deepEqual(
+    Object.keys(MEDIA_DEFAULT_METRICS_BY_TYPE).sort(),
+    Object.keys(MEDIA_METRIC_MATRIX).sort(),
+  );
+  for (const [type, defaults] of Object.entries(MEDIA_DEFAULT_METRICS_BY_TYPE)) {
+    for (const metric of defaults) {
+      assert.ok(MEDIA_METRIC_MATRIX[type]?.includes(metric), `${type} default ${metric}`);
+    }
+  }
 });
 
 test('the period and metric_type vocabularies stay exactly the sets Graph accepts (CC-INS-7)', () => {
@@ -739,12 +777,12 @@ test('a story with no explicit metrics asks for the story row, not the feed row 
   assert.deepEqual(res.metrics, mediaWire.data);
 
   // The other half of the claim, and the reason this test is not satisfied by
-  // the STORY row alone: a recognised type whose row happens to equal the
-  // default set, and an unrecognised one that has no row at all, must still put
-  // the default set on the wire character for character. Without these a
-  // "default" that had quietly become the story row for everything would read
-  // here as a pass.
-  for (const mediaProductType of ['FEED', 'REELS', 'NEW_META_TYPE']) {
+  // the STORY row alone: a recognised type whose row equals the default set,
+  // and an unrecognised one that has no row at all, must still put the default
+  // set on the wire character for character. Without these a "default" that had
+  // quietly become the story row for everything would read here as a pass.
+  // REELS has its own row (the watch-time test below).
+  for (const mediaProductType of ['FEED', 'NEW_META_TYPE']) {
     const other = recordingReq(mediaWire);
     await getMediaInsights(other.req, { mediaId: 'm1', mediaProductType });
     assert.equal(
@@ -753,6 +791,146 @@ test('a story with no explicit metrics asks for the story row, not the feed row 
       `${mediaProductType} must still ask for the default set`,
     );
   }
+});
+
+test('a reel with no explicit metrics asks for the reel row, watch time included', async () => {
+  const { req, calls } = recordingReq(mediaWire);
+  await getMediaInsights(req, { mediaId: 'm1', mediaProductType: 'reels' });
+  assert.deepEqual(calls[0], {
+    method: 'GET',
+    path: '/m1/insights',
+    params: {
+      metric:
+        'views,reach,likes,comments,saved,shares,total_interactions,' +
+        'ig_reels_avg_watch_time,ig_reels_video_view_total_time',
+    },
+  });
+});
+
+test('a watch-time metric Instagram sent no row for is missing, not zero', async () => {
+  const wire = {
+    data: [
+      { name: 'views', period: 'lifetime', values: [{ value: 120 }] },
+      { name: 'ig_reels_avg_watch_time', period: 'lifetime', values: [{ value: 6243 }] },
+    ],
+  };
+  const { req } = recordingReq(wire);
+  const res = await getMediaInsights(req, {
+    mediaId: 'r1',
+    metrics: ['views', 'ig_reels_avg_watch_time', 'ig_reels_video_view_total_time'],
+    mediaProductType: 'REELS',
+  });
+  assert.deepEqual(res, {
+    mediaId: 'r1',
+    metrics: wire.data,
+    missingMetrics: ['ig_reels_video_view_total_time'],
+    note: missingNote(['ig_reels_video_view_total_time']),
+  });
+});
+
+test('watch-time metrics are reel-only and refused for a story', async () => {
+  const { req, calls } = recordingReq(mediaWire);
+  await assert.rejects(
+    getMediaInsights(req, {
+      mediaId: 'm1',
+      metrics: ['ig_reels_avg_watch_time'],
+      mediaProductType: 'STORY',
+    }),
+    (e: unknown) =>
+      isInstagramError(e) &&
+      e.kind === 'validation' &&
+      e.message.startsWith(
+        'Metric(s) ig_reels_avg_watch_time are not valid for media_product_type STORY.',
+      ),
+  );
+  assert.equal(calls.length, 0);
+});
+
+/** Meta's documented sample answer to a story navigation breakdown. */
+const navigationBreakdownWire = {
+  data: [
+    {
+      name: 'navigation',
+      period: 'lifetime',
+      values: [{ value: 25 }],
+      title: 'Navigation',
+      total_value: {
+        value: 25,
+        breakdowns: [
+          {
+            dimension_keys: ['story_navigation_action_type'],
+            results: [
+              { dimension_values: ['tap_forward'], value: 19 },
+              { dimension_values: ['tap_back'], value: 4 },
+              { dimension_values: ['tap_exit'], value: 1 },
+              { dimension_values: ['swipe_forward'], value: 1 },
+            ],
+          },
+        ],
+      },
+      id: '17969782069736348/insights/navigation/lifetime',
+    },
+  ],
+};
+
+test('a story navigation breakdown defaults to the navigation metric and sends the breakdown', async () => {
+  const { req, calls } = recordingReq(navigationBreakdownWire);
+  const res = await getMediaInsights(req, {
+    mediaId: 's1',
+    mediaProductType: 'STORY',
+    breakdown: 'story_navigation_action_type',
+  });
+  assert.deepEqual(calls[0], {
+    method: 'GET',
+    path: '/s1/insights',
+    params: { metric: 'navigation', breakdown: 'story_navigation_action_type' },
+  });
+  assert.deepEqual(res, {
+    mediaId: 's1',
+    metrics: navigationBreakdownWire.data,
+    breakdown: 'story_navigation_action_type',
+  });
+});
+
+test('a breakdown beside any metric but navigation is refused before a call', async () => {
+  // Meta answers a breakdown on a metric that does not support it with an error
+  // for the whole request, so the story's other metrics would be lost too.
+  const { req, calls } = recordingReq(navigationBreakdownWire);
+  const twoMetrics = await getMediaInsights(req, {
+    mediaId: 's1',
+    metrics: ['navigation', 'reach', 'replies'],
+    breakdown: 'story_navigation_action_type',
+  }).catch((e: unknown) => e);
+  assert.ok(isInstagramError(twoMetrics));
+  assert.equal(twoMetrics.kind, 'validation');
+  assert.equal(
+    twoMetrics.message,
+    'breakdown story_navigation_action_type is only compatible with the navigation metric ' +
+      '(story-only), and Instagram rejects the whole request when another metric is named ' +
+      'beside it. Remove reach, replies or request them in a separate call without breakdown.',
+  );
+  assert.equal(calls.length, 0);
+});
+
+test('a navigation breakdown on a known non-story type is refused by the matrix', async () => {
+  const { req, calls } = recordingReq(navigationBreakdownWire);
+  await assert.rejects(
+    getMediaInsights(req, {
+      mediaId: 'r1',
+      mediaProductType: 'REELS',
+      breakdown: 'story_navigation_action_type',
+    }),
+    (e: unknown) =>
+      isInstagramError(e) &&
+      e.message.startsWith('Metric(s) navigation are not valid for media_product_type REELS.'),
+  );
+  assert.equal(calls.length, 0);
+});
+
+test('a result with no breakdown carries no breakdown key', async () => {
+  const { req } = recordingReq(navigationBreakdownWire);
+  const res = await getMediaInsights(req, { mediaId: 's1', metrics: ['navigation'] });
+  assert.equal('breakdown' in res, false);
 });
 
 test('getMediaInsights refuses navigation on a reel before spending a call (CC-INS-2)', async () => {
@@ -789,7 +967,7 @@ test('getMediaInsights matches media_product_type case-insensitively when refusi
       isInstagramError(e) &&
       e.kind === 'validation' &&
       e.message ===
-        'Metric(s) likes are not valid for media_product_type STORY. Valid metrics for this type: views, reach, replies, shares, total_interactions, navigation.',
+        'Metric(s) likes are not valid for media_product_type STORY. Valid metrics for this type: views, reach, replies, shares, total_interactions, navigation, follows, profile_visits, profile_activity.',
   );
   assert.equal(calls.length, 0);
 });
@@ -816,7 +994,7 @@ test('the refusal names only the offending metrics, not the whole request (CC-IN
       isInstagramError(e) &&
       e.kind === 'validation' &&
       e.message ===
-        'Metric(s) navigation are not valid for media_product_type FEED. Valid metrics for this type: views, reach, likes, comments, saved, shares, total_interactions.',
+        'Metric(s) navigation are not valid for media_product_type FEED. Valid metrics for this type: views, reach, likes, comments, saved, shares, total_interactions, follows, profile_visits, profile_activity.',
   );
   assert.equal(calls.length, 0);
 
@@ -1237,6 +1415,7 @@ const VOCABULARIES: readonly (readonly [string, readonly string[]])[] = [
   ['ACCOUNT_METRICS', ACCOUNT_METRICS],
   ['MEDIA_METRICS', MEDIA_METRICS],
   ['DEFAULT_MEDIA_METRICS', DEFAULT_MEDIA_METRICS],
+  ['MEDIA_BREAKDOWNS', MEDIA_BREAKDOWNS],
   ['DEMOGRAPHIC_METRICS', DEMOGRAPHIC_METRICS],
   ['DEMOGRAPHIC_BREAKDOWNS', DEMOGRAPHIC_BREAKDOWNS],
   ['DEMOGRAPHIC_TIMEFRAMES', DEMOGRAPHIC_TIMEFRAMES],
@@ -1332,6 +1511,19 @@ test('MEDIA_METRIC_MATRIX is frozen at both levels', () => {
     assert.throws(() => mutable.push('navigation'), TypeError, `${type} accepts a widening`);
     assert.throws(() => mutable.pop(), TypeError, `${type} accepts a narrowing`);
     assert.deepEqual(mutable, before, `${type}: a write got through`);
+  }
+});
+
+test('MEDIA_DEFAULT_METRICS_BY_TYPE is frozen at both levels', () => {
+  // Same reasoning as the matrix: a push onto the REELS row would silently widen
+  // every bare reel request.
+  assert.ok(Object.isFrozen(MEDIA_DEFAULT_METRICS_BY_TYPE));
+  assert.throws(() => {
+    MEDIA_DEFAULT_METRICS_BY_TYPE.CLIPS = [];
+  }, TypeError);
+  for (const [type, defaults] of Object.entries(MEDIA_DEFAULT_METRICS_BY_TYPE)) {
+    assert.ok(Object.isFrozen(defaults), `the ${type} default list must stay frozen`);
+    assert.throws(() => (defaults as string[]).push('navigation'), TypeError, type);
   }
 });
 
