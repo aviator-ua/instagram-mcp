@@ -10,3 +10,9 @@ coverage/
 
 # MCPB bundles (built by scripts/build-mcpb.sh, attached to releases)
 *.mcpb
+
+# Cloudflare Workers — local secrets and wrangler state
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+.wrangler/

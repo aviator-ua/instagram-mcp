@@ -633,7 +633,10 @@ export function createIgRequest(deps: IgRequestDeps): IgRequestFn {
 
         let res: Response;
         try {
-          const init: RequestInit = { method: opts.method, signal, redirect: 'error' };
+          // `manual`, not `error`: the Workers runtime rejects `redirect: 'error'`
+          // outright, so the refusal is made explicitly below instead — a 3xx is
+          // handed back unfollowed and refused there, on every runtime alike.
+          const init: RequestInit = { method: opts.method, signal, redirect: 'manual' };
           if (body !== undefined) {
             init.body = body;
             init.headers = { 'content-type': 'application/x-www-form-urlencoded' };
@@ -647,6 +650,20 @@ export function createIgRequest(deps: IgRequestDeps): IgRequestFn {
           }
           await sleep(backoffMs(attempt), opts.signal);
           continue;
+        }
+
+        // A redirect is never followed (docs/security.md §3): the allowlist only
+        // ever saw the URL built here, and `Location` would hand the choice of
+        // the next host to whoever answered. Node's fetch returns the 3xx itself
+        // under `manual`; a browser-style fetch returns an `opaqueredirect` with
+        // status 0. Refused at once and never retried — the answer would not
+        // change.
+        if (res.type === 'opaqueredirect' || (res.status >= 300 && res.status < 400)) {
+          await res.body?.cancel();
+          throw new InstagramError(
+            `Refusing to follow a redirect from ${host}; Graph API calls never follow redirects.`,
+            { kind: 'upstream', status: res.status === 0 ? undefined : res.status },
+          );
         }
 
         if (!res.ok) {
