@@ -147,6 +147,14 @@
     {
       "name": "instagram_discover_business",
       "description": "Fetch another business/creator's PUBLIC profile and recent media by handle via GET /{ig-id}?fields=business_discovery.username(<handle>){followers_count,media_count,media{...}}."
+    },
+    {
+      "name": "instagram_list_conversations",
+      "description": "List the Direct Message conversations of the operated account (GET /{ig-id}/conversations?platform=instagram), most recently active first, cursor-paginated."
+    },
+    {
+      "name": "instagram_get_messages",
+      "description": "Read the newest messages of one Direct Message conversation (GET /{conversation-id}?fields=messages, then each message with id, created_time, from, to, message)."
     }
   ],
   "user_config": {

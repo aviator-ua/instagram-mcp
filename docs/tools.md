@@ -125,7 +125,7 @@ Built on the **post-2025-01-08 metric set** (`views`-centric; `video_views`,
 | Tool | Ann. | Purpose / Graph call |
 |---|---|---|
 | `instagram_get_account_insights` | RO | `GET /{ig-id}/insights?metric=views,reach,accounts_engaged,total_interactions,likes,comments,shares,saves,replies,follows_and_unfollows,profile_links_taps&period=day&metric_type=total_value&since=&until=` — `metric_type=time_series` is served for `reach` only: it defaults to `metric=reach`, and any other metric with it is refused before a call (CC-INS-25); a `since` after `until` is refused (CC-INS-26) |
-| `instagram_get_media_insights` | RO | `GET /{media-id}/insights?metric=views,reach,likes,comments,saved,shares,total_interactions` — the default set, sent for a feed post, a reel and for an absent or unrecognized `media_product_type`; `media_product_type=STORY` defaults to `views,reach,replies,shares,total_interactions,navigation` instead (CC-INS-14) |
+| `instagram_get_media_insights` | RO | `GET /{media-id}/insights?metric=views,reach,likes,comments,saved,shares,total_interactions` — the default set, sent for a feed post and for an absent or unrecognized `media_product_type`; `media_product_type=REELS` adds `ig_reels_avg_watch_time,ig_reels_video_view_total_time`, and `media_product_type=STORY` defaults to `views,reach,replies,shares,total_interactions,navigation` instead (CC-INS-14). Also accepted when valid for the type: `follows`, `profile_visits`, `profile_activity` (feed posts and stories) *[verified 2026-10-23 — [media insights reference](https://developers.facebook.com/docs/instagram-platform/reference/instagram-media/insights)]*. The two watch-time rows are published with `unit: "milliseconds"`, values unconverted; Meta's reference does not state the unit `[verify — needs a live call: GET /{reel-id}/insights?metric=ig_reels_avg_watch_time on a reel of known length and compare]`. `breakdown=story_navigation_action_type` splits a story's `navigation` into `tap_forward`/`tap_back`/`tap_exit`/`swipe_forward`; Meta rejects the whole call when a breakdown is sent beside a metric that does not support it, so `navigation` must be the only metric (it is the default with a breakdown) and anything else is refused before a call *[verified 2026-10-23 — same reference]* |
 | `instagram_get_audience_demographics` | RO | `GET /{ig-id}/insights?metric=follower_demographics,engaged_audience_demographics&period=lifetime&metric_type=total_value&breakdown=age\|gender\|city\|country&timeframe=...` — `timeframe` **required** (`last_14_days\|last_30_days\|last_90_days\|prev_month\|this_month\|this_week`), not `since`/`until`; `period=lifetime` is always sent, Meta marks it required (CC-INS-27); requires ≥ 100 followers *[verified 2026-07-21]* |
 | `instagram_get_online_followers` | RO | `GET /{ig-id}/insights?metric=online_followers&period=lifetime` — data covers the **last 30 days only**; metric alive in the legacy reference but absent from the new docs tree → **deprecation watch-list** *[verified 2026-07-21]* |
 
@@ -141,12 +141,18 @@ empirical probe decides whether this package ships or stays dark (see roadmap).
 | `instagram_get_hashtag_media` | RO | `GET /{hashtag-id}/top_media` or `/recent_media` (`user_id` required; public media only) |
 | `instagram_discover_business` | RO | Public profile + media of another business/creator: `GET /{ig-id}?fields=business_discovery.username(<handle>){followers_count,media_count,media{...}}`. The media edge publishes `mediaPaging`: `truncated: true` with `after` when Instagram returned a media cursor — pass it back as `mediaAfter` (sent as `media.after(<cursor>)`) to read further — and without `after`, plus a `note`, when the cursor is unusable (CC-DATA-116) |
 
-## Package `messaging` (phase 2 — design TBD)
+## Package `messaging` (read-only; profile `all` only; **Path A only**)
 
-Conversations list, read messages, send reply (24-hour human-agent window rules),
-via Messenger Platform endpoints. Deliberately deferred: policy-sensitive
-(messaging windows), webhook-dependent for real-time, and the write-safety model
-needs its own review. Will ship dark until reviewed.
+The read half of the Instagram Login Conversations API. No send tool exists —
+sending stays at DEFER in [messaging.md](messaging.md). The package is in no named
+profile but `all`: a DM inbox holds third parties' private messages, so an
+operator opts in with `IG_TOOL_PACKAGES=all` or an explicit list naming
+`messaging`. Needs `instagram_business_manage_messages`.
+
+| Tool | Ann. | Purpose / Graph call |
+|---|---|---|
+| `instagram_list_conversations` | RO | `GET /{ig-id}/conversations?platform=instagram&fields=id,updated_time`, cursor-paginated. An empty first page is published with `emptyResultIsInconclusive: true` and a `note`: Instagram omits Requests-folder conversations inactive for 30 days *[verified 2026-10-23]*, and app mode, the account's message-access setting and the access level are named as possible causes, not verified ones |
+| `instagram_get_messages` | RO | `GET /{conversation-id}?fields=messages`, then `GET /{message-id}?fields=id,created_time,from,to,message` per message (`limit` 1–20). `conversation_id` takes the messaging id rule, not the 64-character Graph one: Instagram Login conversation and message ids are opaque base64url-style blobs of ~100–150 characters, so it admits 1–512 characters of letters, digits, `_`, `-` and `=` (`tools/ids.ts` `messagingObjectId`). Only the **20 most recent** messages of a conversation are readable *[verified 2026-10-23]*; a message whose detail read fails with a non-credential error keeps `id`/`created_time` and is marked `detailsUnavailable`. Message text and usernames are fenced |
 
 ## Structured output
 
@@ -244,7 +250,7 @@ it; the v2 client skips that check, but v1 clients are still in the field
 
 ## Tool-count budget
 
-Initial surface: **29 tools** across 6 packages — deliberately compact; every tool
+Initial surface: **31 tools** across 7 packages — deliberately compact; every tool
 earns its context-window cost. Composites (`post_image`, `post_reel`, `post_story`)
 exist because the container flow is a multi-step protocol the model otherwise gets
 wrong; the primitive tools remain exposed for advanced control.

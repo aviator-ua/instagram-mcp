@@ -11,6 +11,9 @@
 > it. An unverified policy detail is never stated here as fact.
 >
 > **Verdict: DEFER (NO-GO for v1).** See §7 for the conditions that flip it.
+> The verdict covers **sending**. A read-only subset — listing conversations and
+> reading messages — ships since 2026-10-23 as condition 6 of §7 staged it; §8
+> describes it and what it does not prove.
 
 ## 1. Why this review exists
 
@@ -357,3 +360,45 @@ All of these, in order — any one unmet keeps the package closed:
 This document is the M6 gate. Re-opening M6 means updating this file with the
 answers to §7's conditions and re-issuing a verdict here — not adding messaging
 work items to the roadmap and treating the review as passed.
+
+## 8. Read-only subset (shipped 2026-10-23)
+
+Two read tools ship in a `messaging` package; no send tool exists and this
+review's DEFER on sending stands.
+
+| Tool | Graph calls |
+|---|---|
+| `instagram_list_conversations` | `GET /{ig-id}/conversations?platform=instagram&fields=id,updated_time`, cursor-paginated |
+| `instagram_get_messages` | `GET /{conversation-id}?fields=messages`, then `GET /{message-id}?fields=id,created_time,from,to,message` per message, at most 20 |
+
+How condition 6 of §7 is met, and where it is not:
+
+- **Path A only** (`paths: ['ig-login']`), as §2 recommends. Path B messaging is
+  not implemented.
+- **Dark by default.** The package is in no named profile (`core`, `reader`,
+  `publisher`); only `IG_TOOL_PACKAGES=all` or an explicit list naming
+  `messaging` registers it. There is no separate flag beyond that.
+- **Third-party data, said plainly** in [security.md](security.md) §5: message
+  bodies and usernames are fenced as untrusted text (§6 of this review), never
+  logged, never stored.
+- **Not yet run live by this project.** The wire shapes come from Meta's
+  Conversations API guide for Instagram Login *[verified 2026-10-23 — [Conversations API, IG Login](https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/conversations-api/)]*:
+  the list answers `id` and `updated_time` only (no participants field is
+  documented on this path), message details exist for the **20 most recent
+  messages** of a conversation only (an older one answers an error saying it was
+  deleted), and Requests-folder conversations inactive for 30 days are not
+  returned. The guide documents no nested `messages{…}` expansion, so details are
+  read one call per message.
+
+### An empty answer is not an empty inbox
+
+`GET /{ig-id}/conversations` answering `200` with `data: []` is not evidence that
+no conversations exist, and the tool says so: an empty first page carries
+`emptyResultIsInconclusive: true` and a `note`. Only the Requests-folder rule
+above is documented by Meta. The other causes the note names are **possible,
+unverified** ones — an app in Development mode returning only conversations with
+people who hold a role on the app, message access for connected tools switched
+off on the Instagram account, no activity since the permission was granted, and
+the access level (Standard for accounts the app's people manage, Advanced for
+others) — and each needs a live call to settle:
+`[verify — needs a live call: with an app-role tester, send a DM to the account and re-list; then repeat with a non-role sender]`.

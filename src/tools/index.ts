@@ -2,7 +2,7 @@
  * Tool-package barrel (Layer 3). Aggregates every domain package's tool surface
  * into one ordered, frozen `readonly ToolSpec[]` for `mcp/registry.ts` to
  * register. The surface spans read-only packages (account, media, insights,
- * discovery) and the write packages (publishing, comments) that pass every
+ * discovery, messaging) and the write packages (publishing, comments) that pass every
  * mutation through the frozen `mcp/write-mode` gate. Adding a package = one
  * import + one spread here (keep the array order stable so the exposed tool
  * list is deterministic).
@@ -17,6 +17,7 @@ import { insightsTools } from './insights.js';
 import { publishingTools } from './publishing.js';
 import { commentsTools } from './comments.js';
 import { discoveryTools } from './discovery.js';
+import { messagingTools } from './messaging.js';
 
 /**
  * Freeze one spec on its way onto the published surface: the spec object, its
@@ -55,12 +56,12 @@ function publish(spec: ToolSpec): ToolSpec {
  * Equivalent-mutant note: five mutations of this module survive the whole suite
  * because none of them changes what the module computes.
  *
- * 1. The six spreads rewritten as `accountTools.concat(mediaTools, ..., discoveryTools)`
+ * 1. The seven spreads rewritten as `accountTools.concat(mediaTools, ..., messagingTools)`
  *    builds a distinct array holding the identical spec objects in the identical order
  *    (verified by reference equality against the spread form), which `.map(publish)` then
  *    freezes one for one. Only the syntax moves.
  * 2. Dropping the trailing comma after the last spread is one character of source
- *    formatting; the array literal it emits is the same six spreads. Unlike 4 and
+ *    formatting; the array literal it emits is the same seven spreads. Unlike 4 and
  *    5 the emit is not byte-identical: tsc preserves the comma, so this one is a
  *    one-byte diff (measured 2026-09-23: 4408 -> 4407 bytes, the sole hunk being
  *    the comma itself).
@@ -90,5 +91,6 @@ export const allTools: readonly ToolSpec[] = Object.freeze(
     ...publishingTools,
     ...commentsTools,
     ...discoveryTools,
+    ...messagingTools,
   ].map(publish),
 );

@@ -52,6 +52,7 @@ import {
   setCommentsEnabled,
 } from '../../src/api/comments.js';
 import { getMedia, getMediaChildren, listMedia, listStories } from '../../src/api/media.js';
+import { getConversationMessages, listConversations } from '../../src/api/messaging.js';
 import {
   getAccountInsights,
   getAudienceDemographics,
@@ -271,6 +272,16 @@ const PATH_CALLS: {
     source: 'media.ts:getMediaChildren',
     label: 'getMediaChildren(mediaId)',
     call: (req, id) => getMediaChildren(req, { mediaId: id }),
+  },
+  {
+    source: 'messaging.ts:listConversations',
+    label: 'listConversations(igId)',
+    call: (req, id) => listConversations(req, { igId: id, maxItems: 10 }),
+  },
+  {
+    source: 'messaging.ts:getConversationMessages',
+    label: 'getConversationMessages(conversationId)',
+    call: (req, id) => getConversationMessages(req, { conversationId: id }),
   },
   {
     source: 'publishing.ts:createMediaContainer',

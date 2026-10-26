@@ -320,8 +320,12 @@ rather than replacing it — the env flags remain the floor.
   on every call + **"Require App Secret"** enabled — a stolen bare token is useless
   against the app, and a captured proof expires with its `appsecret_time`
   (CC-AUTH-15).
-- Standard Access only, single-operator: no third-party data ever transits the
-  server; Data Use Checkup surface is minimal.
+- Standard Access only, single-operator; Data Use Checkup surface is minimal. One
+  exception to "only the operator's own content": the opt-in, read-only `messaging`
+  package returns other people's Direct Messages to the MCP client. It is in no
+  profile but `all`, never logs message text or usernames (`logFields` carries ids
+  and sizes only), stores nothing, and fences every message body and username as
+  untrusted text ([messaging.md](messaging.md) §8).
 - `doctor` surfaces token scope drift so overgranted scopes get trimmed;
   `instagram_token_status` surfaces the data-access window (`dataAccessExpiresAt`,
   from `data_access_expires_at`) on Path B. A value outside the range `expires_at`
@@ -340,8 +344,9 @@ rather than replacing it — the env flags remain the floor.
 ## 7. Content & policy boundaries
 
 - Official Graph API only; the server never automates the Instagram app/website,
-  never stores other users' data beyond the returned API responses, and respects
-  the platform's messaging windows (phase-2 design gate).
+  never stores other users' data beyond the returned API responses, and sends no
+  messages at all (sending is DEFER in [messaging.md](messaging.md); only the
+  read-only conversation tools ship).
 - `SECURITY.md` with a disclosure contact ships with the first public release.
 
 ### Untrusted text on the two result surfaces

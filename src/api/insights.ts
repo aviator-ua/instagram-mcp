@@ -57,9 +57,19 @@ export type AccountMetric = (typeof ACCOUNT_METRICS)[number];
 
 /**
  * Media-level metrics. Validity depends on `media_product_type` — see
- * {@link MEDIA_METRIC_MATRIX} (CC-INS-2). `navigation`/`replies` are story-only.
+ * {@link MEDIA_METRIC_MATRIX} (CC-INS-2). `navigation`/`replies` are story-only;
+ * the two `ig_reels_*` watch-time metrics are reel-only; `follows`,
+ * `profile_visits` and `profile_activity` are feed-post and story metrics.
  * (Note the account/media naming quirk Meta keeps: account uses `saves`, media
  * uses `saved`.)
+ *
+ * The last five were added from Meta's media-insights metrics table
+ * *[verified 2026-10-23 —
+ * https://developers.facebook.com/docs/instagram-platform/reference/instagram-media/insights]*.
+ * Metrics that table marks Facebook-Login-only (`total_*`), Facebook-crossposted
+ * only (`crossposted_views`, `facebook_views`), deprecated (`impressions`) or that
+ * no caller asked for yet (`link_clicks`, `reels_skip_rate`, `reposts`) are left
+ * out on purpose.
  */
 export const MEDIA_METRICS = Object.freeze([
   'views',
@@ -71,14 +81,19 @@ export const MEDIA_METRICS = Object.freeze([
   'total_interactions',
   'navigation',
   'replies',
+  'follows',
+  'profile_visits',
+  'profile_activity',
+  'ig_reels_avg_watch_time',
+  'ig_reels_video_view_total_time',
 ] as const);
 export type MediaMetric = (typeof MEDIA_METRICS)[number];
 
 /**
  * The metric set requested when the caller names no metrics AND the product
- * type is unknown or unstated. It is the FEED/REELS row of
- * {@link MEDIA_METRIC_MATRIX} verbatim; {@link getMediaInsights} prefers the
- * matrix row for a product type it recognises (CC-INS-14).
+ * type is unknown or unstated. It is the FEED row of
+ * {@link MEDIA_DEFAULT_METRICS_BY_TYPE} verbatim; {@link getMediaInsights}
+ * prefers the row for a product type it recognises (CC-INS-14).
  */
 export const DEFAULT_MEDIA_METRICS: readonly MediaMetric[] = Object.freeze([
   'views',
@@ -94,6 +109,10 @@ export const DEFAULT_MEDIA_METRICS: readonly MediaMetric[] = Object.freeze([
  * Which media metrics are valid per `media_product_type` (CC-INS-2). Keys are
  * the known Meta product types; an unknown type (Meta adds new ones — CC-DATA-6
  * open vocabulary) skips client validation and lets Meta be the authority.
+ *
+ * This is the VALIDITY table, not the default one: a metric can be valid for a
+ * type without being requested by default (see
+ * {@link MEDIA_DEFAULT_METRICS_BY_TYPE}).
  */
 export const MEDIA_METRIC_MATRIX: Record<string, readonly MediaMetric[]> = Object.freeze({
   FEED: Object.freeze([
@@ -104,6 +123,9 @@ export const MEDIA_METRIC_MATRIX: Record<string, readonly MediaMetric[]> = Objec
     'saved',
     'shares',
     'total_interactions',
+    'follows',
+    'profile_visits',
+    'profile_activity',
   ] as const),
   REELS: Object.freeze([
     'views',
@@ -113,6 +135,45 @@ export const MEDIA_METRIC_MATRIX: Record<string, readonly MediaMetric[]> = Objec
     'saved',
     'shares',
     'total_interactions',
+    'ig_reels_avg_watch_time',
+    'ig_reels_video_view_total_time',
+  ] as const),
+  STORY: Object.freeze([
+    'views',
+    'reach',
+    'replies',
+    'shares',
+    'total_interactions',
+    'navigation',
+    'follows',
+    'profile_visits',
+    'profile_activity',
+  ] as const),
+});
+
+/**
+ * The metric set requested per recognised `media_product_type` when the caller
+ * names no metrics (CC-INS-14). Kept apart from {@link MEDIA_METRIC_MATRIX} so
+ * widening what a type ACCEPTS does not silently widen what every call ASKS for:
+ * FEED is {@link DEFAULT_MEDIA_METRICS}; REELS adds the two watch-time metrics,
+ * so a reel's default report carries average and total watch time; STORY is the
+ * story row the matrix had before `follows` / `profile_visits` /
+ * `profile_activity` joined it. Every row is a subset of the matrix row for the
+ * same type, which the tests pin, so a default can never be refused by the
+ * validity check it is about to pass through.
+ */
+export const MEDIA_DEFAULT_METRICS_BY_TYPE: Record<string, readonly MediaMetric[]> = Object.freeze({
+  FEED: DEFAULT_MEDIA_METRICS,
+  REELS: Object.freeze([
+    'views',
+    'reach',
+    'likes',
+    'comments',
+    'saved',
+    'shares',
+    'total_interactions',
+    'ig_reels_avg_watch_time',
+    'ig_reels_video_view_total_time',
   ] as const),
   STORY: Object.freeze([
     'views',
@@ -123,6 +184,19 @@ export const MEDIA_METRIC_MATRIX: Record<string, readonly MediaMetric[]> = Objec
     'navigation',
   ] as const),
 });
+
+/**
+ * Media-insights `breakdown` values (one per call). Meta documents
+ * `story_navigation_action_type` as compatible with the `navigation` metric only,
+ * and answers a request that names any other metric beside a breakdown with an
+ * error for the whole call *[verified 2026-10-23 — same reference]*. The
+ * `action_type` breakdown (for `profile_activity`) is not offered yet.
+ */
+export const MEDIA_BREAKDOWNS = Object.freeze(['story_navigation_action_type'] as const);
+export type MediaBreakdown = (typeof MEDIA_BREAKDOWNS)[number];
+
+/** The one metric {@link MEDIA_BREAKDOWNS} can be combined with. */
+const BREAKDOWN_METRIC: MediaMetric = 'navigation';
 
 /** Audience-demographics metrics (docs/tools.md `get_audience_demographics`). */
 export const DEMOGRAPHIC_METRICS = Object.freeze([
@@ -578,9 +652,10 @@ export async function getAccountInsights(
 export interface MediaInsightsParams {
   mediaId: string;
   /**
-   * When omitted, the {@link MEDIA_METRIC_MATRIX} row for `mediaProductType` is
-   * requested if that type is recognised, and {@link DEFAULT_MEDIA_METRICS}
-   * otherwise (CC-INS-14).
+   * When omitted, the {@link MEDIA_DEFAULT_METRICS_BY_TYPE} row for
+   * `mediaProductType` is requested if that type is recognised, and
+   * {@link DEFAULT_MEDIA_METRICS} otherwise (CC-INS-14). With a `breakdown` it
+   * defaults to `['navigation']`, the one metric a breakdown combines with.
    */
   metrics?: readonly MediaMetric[];
   /**
@@ -588,48 +663,71 @@ export interface MediaInsightsParams {
    * client-side metric-matrix check before the call is spent.
    */
   mediaProductType?: string;
+  /** Optional breakdown; valid with the `navigation` metric alone. */
+  breakdown?: MediaBreakdown;
 }
 
 export interface MediaInsightsResult {
   mediaId: string;
   metrics: InsightMetric[];
+  /** The breakdown that was requested; present only when one was. */
+  breakdown?: MediaBreakdown;
   /** Requested metrics with no row in `metrics`; present only when non-empty. */
   missingMetrics?: string[];
   /** {@link missingMetricsNote} for `missingMetrics`; present with it. */
   note?: string;
 }
 
+/**
+ * Refuse a breakdown request Graph would reject as a whole: Meta answers a
+ * breakdown beside any metric that does not support it with an error for the
+ * entire call, so `navigation` must be the only metric named.
+ */
+function validateMediaBreakdown(metrics: readonly MediaMetric[], breakdown: MediaBreakdown): void {
+  const invalid = metrics.filter((m) => m !== BREAKDOWN_METRIC);
+  if (invalid.length > 0) {
+    throw new InstagramError(
+      `breakdown ${breakdown} is only compatible with the ${BREAKDOWN_METRIC} metric (story-only), and Instagram rejects the whole request when another metric is named beside it. Remove ${invalid.join(', ')} or request them in a separate call without breakdown.`,
+      { kind: 'validation' },
+    );
+  }
+}
+
 export async function getMediaInsights(
   req: IgRequestFn,
   params: MediaInsightsParams,
 ): Promise<MediaInsightsResult> {
-  // CC-INS-14: the default is the set valid for THIS product type. Defaulting to
-  // the feed set for everything made `getMediaInsights({ mediaProductType:
+  // CC-INS-14: the default is the set for THIS product type. Defaulting to the
+  // feed set for everything made `getMediaInsights({ mediaProductType:
   // 'STORY' })` with no `metrics` throw a client-side validation error every
   // time, because the feed set carries `likes`, `comments` and `saved` and the
   // STORY row does not — the tool description tells the caller that naming the
   // product type buys an early refusal of INVALID combinations, not a refusal of
   // the combination the api layer itself chose. A recognised type takes its own
-  // row; an unrecognised or unstated one (CC-DATA-6 open vocabulary) falls
-  // through to the feed set exactly as before, and the FEED/REELS rows are
-  // element-for-element identical to it, so STORY is the only behaviour change.
+  // default row; an unrecognised or unstated one (CC-DATA-6 open vocabulary)
+  // falls through to the feed set. FEED's row IS that set; REELS adds the two
+  // watch-time metrics and STORY is the story row.
+  const breakdown = params.breakdown;
   const metrics =
     params.metrics ??
-    MEDIA_METRIC_MATRIX[params.mediaProductType?.toUpperCase() ?? ''] ??
-    DEFAULT_MEDIA_METRICS;
+    (breakdown !== undefined
+      ? [BREAKDOWN_METRIC]
+      : (MEDIA_DEFAULT_METRICS_BY_TYPE[params.mediaProductType?.toUpperCase() ?? ''] ??
+        DEFAULT_MEDIA_METRICS));
+  if (breakdown !== undefined) validateMediaBreakdown(metrics, breakdown);
   validateMediaMetrics(metrics, params.mediaProductType);
+  const query: Record<string, string> = { metric: metrics.join(',') };
+  if (breakdown !== undefined) query.breakdown = breakdown;
   const read = readInsightsBody(
     await req<unknown>({
       method: 'GET',
       path: `/${encodeURIComponent(params.mediaId)}/insights`,
-      params: { metric: metrics.join(',') },
+      params: query,
     }),
   );
-  return withMissing<MediaInsightsResult>(
-    { mediaId: params.mediaId, metrics: read.rows },
-    metrics,
-    read,
-  );
+  const result: MediaInsightsResult = { mediaId: params.mediaId, metrics: read.rows };
+  if (breakdown !== undefined) result.breakdown = breakdown;
+  return withMissing<MediaInsightsResult>(result, metrics, read);
 }
 
 // --- Audience demographics --------------------------------------------------
