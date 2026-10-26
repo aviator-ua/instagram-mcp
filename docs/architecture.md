@@ -99,7 +99,7 @@ export interface ToolSpec<S extends z.ZodRawShape> {
 | `comments` | list/reply/hide/delete comments, mentions, **toggle commenting on a media** | yes |
 | `insights` | account + media insights, demographics | yes |
 | `discovery` | hashtag search/top/recent, business discovery | no (`reader`, `all`) |
-| `messaging` | IG DMs via Messenger Platform | no (phase 2, `all`) |
+| `messaging` | read-only IG DMs: list conversations, read the 20 newest messages (Path A only, no send) | no (`all` only) |
 
 **Where `instagram_set_comments_enabled` lives, and why it matters.** It is
 implemented in `src/tools/comments.ts` and, since 2026-09-30, tagged `comments`

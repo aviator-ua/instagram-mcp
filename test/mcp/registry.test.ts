@@ -160,7 +160,7 @@ test('buildManifest groups every v1 package and holds the tag invariant', () => 
   const manifest = buildManifest(allTools);
   assert.deepEqual(
     manifest.map((p) => p.name),
-    ['account', 'comments', 'discovery', 'insights', 'media', 'publishing'],
+    ['account', 'comments', 'discovery', 'insights', 'media', 'messaging', 'publishing'],
   );
   // Invariant: every tool in a package's list actually carries that package tag.
   for (const pkg of manifest) {
@@ -200,6 +200,7 @@ test('buildManifest snapshot: package -> sorted tool names', () => {
     // `instagram_set_comments_enabled` is tagged `comments` since CC-PROC-9, so
     // media holds only the three media readers.
     media: ['instagram_get_media', 'instagram_list_media', 'instagram_list_stories'],
+    messaging: ['instagram_get_messages', 'instagram_list_conversations'],
     publishing: [
       'instagram_create_media_container',
       'instagram_get_container_status',
@@ -298,6 +299,7 @@ test('selectPackages: all selects every package in the manifest', () => {
     'discovery',
     'insights',
     'media',
+    'messaging',
     'publishing',
   ]);
 });
@@ -307,7 +309,14 @@ test('selectPackages: IG_PACKAGES_DENY removes a package after profile resolutio
     IG_TOOL_PACKAGES: 'all',
     IG_PACKAGES_DENY: 'insights',
   });
-  assert.deepEqual([...active].sort(), ['account', 'comments', 'discovery', 'media', 'publishing']);
+  assert.deepEqual([...active].sort(), [
+    'account',
+    'comments',
+    'discovery',
+    'media',
+    'messaging',
+    'publishing',
+  ]);
 });
 
 test('selectPackages: IG_PACKAGES_READONLY is surfaced as the readonly set', () => {
@@ -709,7 +718,7 @@ test('D1: a tool that declares BOTH paths registers when only one of them is con
 
 test('registerTools fails fast when the default profile does not exist', () => {
   // `IG_ACTIVE_PROFILE=brnad` (a typo) otherwise produces a server that starts
-  // clean, advertises all 29 tools, and fails EVERY call — the misconfiguration
+  // clean, advertises all 31 tools, and fails EVERY call — the misconfiguration
   // surfaces once per tool call as a validation error instead of once at boot.
   // The check belongs at registration because that is where it is still cheap
   // to abort; the message has to name the bad value and the real ones.
@@ -1060,15 +1069,16 @@ test('the wrapper fallback labels a root-level failure `(root)` rather than an e
 });
 
 test('real McpServer: the whole v1 surface registers, lists and stays closed', async () => {
-  // `all` + a Path-B profile keeps every tool past D1 filtering, so this is the
-  // full 29-tool surface end to end on a real server.
+  // `all` + one profile on each auth path keeps every tool past D1 filtering
+  // (discovery is Path-B only, messaging Path-A only), so this is the full
+  // 31-tool surface end to end on a real server.
   const live = await liveServer(allTools, {
-    profiles: [fbProfile],
+    profiles: [igProfile, { ...fbProfile, name: 'brand' }],
     env: { IG_TOOL_PACKAGES: 'all' },
   });
   try {
     assert.equal(live.registered.length, allTools.length, 'every v1 tool registers');
-    assert.equal(allTools.length, 29, 'the v1 surface is 29 tools');
+    assert.equal(allTools.length, 31, 'the v1 surface is 31 tools');
 
     const { tools } = await live.client.listTools();
     assert.deepEqual([...tools.map((t) => t.name)].sort(), [...live.registered].sort());

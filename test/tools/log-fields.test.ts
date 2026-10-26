@@ -118,8 +118,18 @@ const CASES: LogCase[] = [
   },
   {
     name: 'instagram_get_media_insights',
-    args: { media_id: 'M1', metrics: ['views'], media_product_type: 'REELS' },
-    expect: { media_id: 'M1', metrics: ['views'], media_product_type: 'REELS' },
+    args: {
+      media_id: 'M1',
+      metrics: ['navigation'],
+      media_product_type: 'STORY',
+      breakdown: 'story_navigation_action_type',
+    },
+    expect: {
+      media_id: 'M1',
+      metrics: ['navigation'],
+      media_product_type: 'STORY',
+      breakdown: 'story_navigation_action_type',
+    },
   },
   {
     name: 'instagram_get_audience_demographics',
@@ -236,6 +246,18 @@ const CASES: LogCase[] = [
     name: 'instagram_discover_business',
     args: { username: 'competitor', mediaLimit: 5 },
     expect: { username: 'competitor', mediaLimit: 5 },
+  },
+
+  // --- messaging -----------------------------------------------------------
+  {
+    name: 'instagram_list_conversations',
+    args: { limit: 25, after: 'CURSOR' },
+    expect: { limit: 25, fetchAll: false, hasCursor: true },
+  },
+  {
+    name: 'instagram_get_messages',
+    args: { conversation_id: 'T1', limit: 5 },
+    expect: { conversation_id: 'T1', limit: 5 },
   },
 ];
 

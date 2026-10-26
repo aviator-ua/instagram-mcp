@@ -101,3 +101,38 @@ export const GRAPH_ID_MESSAGE =
 export function graphObjectId(): z.ZodString {
   return z.string().min(1).regex(GRAPH_ID_PATTERN, GRAPH_ID_MESSAGE);
 }
+
+/**
+ * The accepted shape of a Direct Message object id (a conversation or a
+ * message): 1–512 characters, letters, digits, `_`, `-` and `=` only.
+ *
+ * Its own rule because Instagram Login messaging ids are not Graph object ids
+ * in the {@link GRAPH_ID_PATTERN} sense: they are opaque base64url-style blobs
+ * (`aWdfZAG06MTpJR01lc3NhZA2VUaHJlYWQ6…`) commonly 100–150 characters long, so
+ * the 64-character bound refuses every real one. The charset is still the
+ * URL-safe complement of the metacharacters listed at the top of this module —
+ * `=` is the only addition, as base64 padding, and it cannot restructure a path
+ * (the api layer percent-encodes it like every other interpolation). `/`, `?`,
+ * `#`, `&`, `.`, `%` and whitespace stay refused. Widening
+ * {@link GRAPH_ID_PATTERN} instead would loosen every other id argument, and
+ * `core/errors.ts` echoes ids of that shape bare.
+ */
+export const MESSAGING_ID_PATTERN = /^[A-Za-z0-9_=-]{1,512}$/;
+
+/** Rejection text for {@link MESSAGING_ID_PATTERN}; never quotes the input. */
+export const MESSAGING_ID_MESSAGE =
+  'must be an Instagram messaging id: 1-512 characters, letters, digits, "_", "-" or "=" only ' +
+  '(use an id returned by instagram_list_conversations; "/", "?", "#", "&", "." and spaces ' +
+  'are not ids)';
+
+/**
+ * A conversation-id argument. `.min(1)` and `.max(512)` are there for the
+ * published JSON Schema, exactly as `.min(1)` is on {@link graphObjectId}.
+ */
+export function messagingObjectId(): z.ZodString {
+  return z
+    .string()
+    .min(1)
+    .max(512, MESSAGING_ID_MESSAGE)
+    .regex(MESSAGING_ID_PATTERN, MESSAGING_ID_MESSAGE);
+}

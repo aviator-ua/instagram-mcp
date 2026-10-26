@@ -24,6 +24,7 @@ import {
   DEMOGRAPHIC_BREAKDOWNS,
   DEMOGRAPHIC_METRICS,
   DEMOGRAPHIC_TIMEFRAMES,
+  MEDIA_BREAKDOWNS,
   MEDIA_METRICS,
   METRIC_TYPES,
   RETENTION_DAYS,
@@ -33,6 +34,22 @@ import {
 const PACKAGE = 'insights';
 
 const readOnly = { readOnlyHint: true, openWorldHint: true } as const;
+
+/** The `unit` published on a duration metric row. */
+const MILLISECONDS = 'milliseconds';
+
+/**
+ * Metrics whose values are durations, not counts. Graph sends them as bare
+ * numbers beside the count metrics with nothing on the row saying so, and a
+ * model reading `ig_reels_avg_watch_time: 6243` cannot tell 6.2 seconds from
+ * 104 minutes. Meta's reference does not state the unit; milliseconds is the
+ * unit these metrics are observed to carry, and docs/tools.md keeps a
+ * `[verify — live call]` stamp on it until a probe pins it.
+ */
+const MILLISECOND_METRICS: readonly string[] = Object.freeze([
+  'ig_reels_avg_watch_time',
+  'ig_reels_video_view_total_time',
+]);
 
 /**
  * Permissive structuredContent shape for one metric row: known post-2025 fields
@@ -53,6 +70,14 @@ const insightMetricOutput = z
     id: z.string().optional(),
     values: z.array(z.record(z.string(), z.unknown())).optional(),
     total_value: z.record(z.string(), z.unknown()).optional(),
+    unit: z
+      .literal(MILLISECONDS)
+      .optional()
+      .describe(
+        'Set on the reel watch-time metrics (ig_reels_avg_watch_time, ' +
+          'ig_reels_video_view_total_time): their values are durations in milliseconds, ' +
+          'passed through unconverted. Absent on count metrics.',
+      ),
     omittedValues: z
       .number()
       .int()
@@ -240,6 +265,10 @@ function metricRow(m: Record<string, unknown>): Record<string, unknown> {
   stringField(rec, 'description');
   stringField(rec, 'id');
   delete rec.omittedValues;
+  // `unit` is ours, never the wire's: removed first, then set only where the
+  // metric name says the value is a duration.
+  delete rec.unit;
+  if (MILLISECOND_METRICS.includes(rec.name as string)) rec.unit = MILLISECONDS;
   const values = rec.values;
   if (isUnknownArray(values)) {
     const kept = values.filter(isReadableInterval);
@@ -388,7 +417,7 @@ const mediaInsightsInput = {
   metrics: boundedArray(z.enum(MEDIA_METRICS), 1)
     .optional()
     .describe(
-      'Media metrics to fetch. Defaults to the set valid for the media: views, reach, likes, comments, saved, shares, total_interactions for a feed post or a reel, and views, reach, replies, shares, total_interactions, navigation when media_product_type is STORY. An absent or unrecognized media_product_type gets the feed set. Validity depends on the media type: "navigation" and "replies" are story-only and are refused for feed posts and reels.',
+      'Media metrics to fetch. Defaults to the set for the media: views, reach, likes, comments, saved, shares, total_interactions for a feed post; the same plus ig_reels_avg_watch_time, ig_reels_video_view_total_time when media_product_type is REELS; and views, reach, replies, shares, total_interactions, navigation when media_product_type is STORY. An absent or unrecognized media_product_type gets the feed set. With breakdown it defaults to navigation. Validity depends on the media type: "navigation" and "replies" are story-only; ig_reels_avg_watch_time and ig_reels_video_view_total_time are reel-only and in milliseconds; follows, profile_visits and profile_activity are for feed posts and stories. A metric invalid for the stated type is refused.',
     ),
   media_product_type: z
     .string()
@@ -396,19 +425,26 @@ const mediaInsightsInput = {
     .describe(
       'Optional product-type hint (known values: FEED, REELS, STORY; obtainable from instagram_get_media). When supplied and recognized, it selects the default metric set for that type and invalid metric/type combinations are refused before the call is spent.',
     ),
+  breakdown: z
+    .enum(MEDIA_BREAKDOWNS)
+    .optional()
+    .describe(
+      'Optional story breakdown. "story_navigation_action_type" splits a story\'s navigation count into tap_forward, tap_back, tap_exit and swipe_forward (in total_value.breakdowns). Story-only and valid with the navigation metric alone: Instagram rejects the whole request when any other metric is named beside it, so other metrics are refused client-side.',
+    ),
 };
 
 const mediaInsightsTool = defineTool({
   name: 'instagram_get_media_insights',
   title: 'Get media insights',
   description:
-    'Insights for a single media object (GET /{media-id}/insights). The valid metric set varies by media_product_type; supply media_product_type to have invalid combinations rejected client-side. Insights on media created before the account became professional, or on an expired story, may return empty or error. A requested metric Instagram returned no data for is listed in missingMetrics and explained in note; it is absent, not zero.',
+    'Insights for a single media object (GET /{media-id}/insights). The valid metric set varies by media_product_type; supply media_product_type to have invalid combinations rejected client-side. A reel\'s default set includes ig_reels_avg_watch_time and ig_reels_video_view_total_time, whose values are milliseconds (marked unit: "milliseconds" on the row). A story\'s navigation can be split by breakdown story_navigation_action_type. Insights on media created before the account became professional, or on an expired story, may return empty or error. A requested metric Instagram returned no data for is listed in missingMetrics and explained in note; it is absent, not zero.',
   package: PACKAGE,
   annotations: readOnly,
   input: mediaInsightsInput,
   output: {
     mediaId: z.string(),
     metrics: z.array(insightMetricOutput),
+    breakdown: z.string().optional(),
     missingMetrics: z.array(z.string()).optional(),
     note: z.string().optional(),
   },
@@ -416,12 +452,14 @@ const mediaInsightsTool = defineTool({
     media_id: args.media_id,
     metrics: args.metrics ?? 'default',
     media_product_type: args.media_product_type,
+    breakdown: args.breakdown,
   }),
   handler: async (args, ctx) => {
     const result = await getMediaInsights(ctx.req, {
       mediaId: args.media_id,
       metrics: args.metrics,
       mediaProductType: args.media_product_type,
+      breakdown: args.breakdown,
     });
     return json(publishable({ ...result }), { pretty: ctx.settings.prettyJson });
   },

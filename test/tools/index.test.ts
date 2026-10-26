@@ -34,6 +34,7 @@ import { insightsTools } from '../../src/tools/insights.js';
 import { publishingTools } from '../../src/tools/publishing.js';
 import { commentsTools } from '../../src/tools/comments.js';
 import { discoveryTools } from '../../src/tools/discovery.js';
+import { messagingTools } from '../../src/tools/messaging.js';
 
 const realFetch = globalThis.fetch;
 globalThis.fetch = () => {
@@ -85,6 +86,9 @@ const V1_SURFACE: readonly string[] = [
   'instagram_search_hashtag',
   'instagram_get_hashtag_media',
   'instagram_discover_business',
+  // messaging (2, read-only)
+  'instagram_list_conversations',
+  'instagram_get_messages',
 ];
 
 /**
@@ -101,9 +105,10 @@ const V1_PACKAGE_TAGS: readonly string[] = [
   ...Array<string>(7).fill('publishing'),
   ...Array<string>(9).fill('comments'),
   ...Array<string>(3).fill('discovery'),
+  ...Array<string>(2).fill('messaging'),
 ];
 
-/** The six package arrays in the order the barrel is supposed to spread them. */
+/** The seven package arrays in the order the barrel is supposed to spread them. */
 const SPREADS: readonly (readonly [string, readonly ToolSpec[]])[] = [
   ['accountTools', accountTools],
   ['mediaTools', mediaTools],
@@ -111,6 +116,7 @@ const SPREADS: readonly (readonly [string, readonly ToolSpec[]])[] = [
   ['publishingTools', publishingTools],
   ['commentsTools', commentsTools],
   ['discoveryTools', discoveryTools],
+  ['messagingTools', messagingTools],
 ];
 
 test('allTools is exactly the v1 surface, in registration order', () => {
@@ -119,7 +125,7 @@ test('allTools is exactly the v1 surface, in registration order', () => {
     [...V1_SURFACE],
     'the exposed tool surface changed — update V1_SURFACE only if the change is intended',
   );
-  assert.equal(allTools.length, 29, 'the v1 surface is 29 tools');
+  assert.equal(allTools.length, 31, 'the v1 surface is 31 tools');
 });
 
 test('allTools carries the pinned package tag for every position', () => {
@@ -133,7 +139,7 @@ test('allTools carries the pinned package tag for every position', () => {
   );
 });
 
-test('allTools is the six package arrays concatenated, by identity and in order', () => {
+test('allTools is the seven package arrays concatenated, by identity and in order', () => {
   // Identity, not deep equality: the barrel must hand the registry the very
   // spec objects its packages exported. A barrel that mapped, cloned or
   // re-wrapped them would still list the same names while shipping handlers
@@ -164,7 +170,7 @@ test('every package contributes all of its tools exactly once', () => {
     }
     counted += tools.length;
   }
-  assert.equal(allTools.length, counted, 'allTools holds specs from outside the six packages');
+  assert.equal(allTools.length, counted, 'allTools holds specs from outside the seven packages');
 });
 
 test('no tool name appears twice in the surface', () => {
@@ -196,6 +202,7 @@ test('packages first appear in the order the generated README renders them', () 
     'publishing',
     'comments',
     'discovery',
+    'messaging',
   ]);
 });
 
@@ -259,7 +266,7 @@ test('the published surface is frozen: allTools cannot be grown, shrunk or reord
 });
 
 test('every published spec is frozen, with its annotations and its input/output shapes', () => {
-  assert.equal(allTools.length, 29, 'guard: an empty surface would pass this test vacuously');
+  assert.equal(allTools.length, 31, 'guard: an empty surface would pass this test vacuously');
   for (const spec of allTools) {
     assert.throws(
       () => {
@@ -392,7 +399,7 @@ test('the insights package shares one annotations object, and it is frozen once 
 test('each package array is frozen too, so the barrel is not the only door', () => {
   // Every spec on `allTools` is also reachable through the package array it came
   // from, and `test/tools/index.test.ts` is not the only importer of those —
-  // `test/mcp/tool-metadata-contract.test.ts` imports all six. Freezing only the
+  // `test/mcp/tool-metadata-contract.test.ts` imports all seven. Freezing only the
   // barrel would leave `commentsTools.push(...)` open to anything that imports
   // the package directly, and the barrel spreads that array at load time, so the
   // extra tool would reach the real surface on the next process start.

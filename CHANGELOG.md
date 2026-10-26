@@ -17,6 +17,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `account`, `media`, `insights` and `messaging` packages are registered. Build
   with `npm run build:worker`, test in workerd with `npm run test:worker`;
   see `docs/cloudflare-workers.md`.
+- `instagram_get_media_insights` accepts the reel watch-time metrics
+  `ig_reels_avg_watch_time` and `ig_reels_video_view_total_time` (REELS only) and
+  `follows`, `profile_visits`, `profile_activity` (feed posts and stories), per
+  Meta's media-insights metrics table.
+- `instagram_get_media_insights` takes an optional
+  `breakdown: "story_navigation_action_type"`, which splits a story's `navigation`
+  into tap forward / tap back / tap exit / swipe forward. It combines with the
+  `navigation` metric alone (the default when a breakdown is given); any other
+  metric beside it is refused before a call, since Meta rejects the whole request.
+- Published metric rows for the two watch-time metrics carry
+  `unit: "milliseconds"`; values are passed through unconverted.
+- `messaging` package with two read-only tools (Path A / `ig-login` only):
+  `instagram_list_conversations` (`GET /{ig-id}/conversations?platform=instagram`,
+  cursor-paginated) and `instagram_get_messages` (the newest messages of one
+  conversation, at most the 20 Instagram serves). No tool sends a message;
+  sending stays DEFER in `docs/messaging.md`. The package is in no named profile
+  but `all`. An empty answer carries `emptyResultIsInconclusive: true` and a note
+  instead of reading as an empty inbox; message text and usernames are fenced as
+  untrusted text and never logged.
 - Worker: optional Story history. With a D1 database bound as `STORY_DB` and a
   Cron Trigger, live Stories' insights are snapshotted every 15 minutes, and the
   read-only tool `instagram_get_story_history` returns each Story's last
@@ -28,6 +47,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Graph requests ask `fetch` for `redirect: 'manual'` and refuse any 3xx answer
   themselves (`kind: upstream`, never retried), instead of `redirect: 'error'`,
   which the Workers runtime rejects. Redirects are still never followed.
+- A bare `instagram_get_media_insights` call with `media_product_type: "REELS"`
+  now also requests `ig_reels_avg_watch_time` and `ig_reels_video_view_total_time`.
+  The FEED, STORY and unknown-type defaults are unchanged.
 
 ## [0.8.0] — 2026-10-13
 
