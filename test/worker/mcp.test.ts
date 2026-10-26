@@ -16,6 +16,7 @@ import {
 import type { WorkerEnv } from '../../src/worker/config.js';
 import type { ToolSpec } from '../../src/mcp/define.js';
 import { allTools } from '../../src/tools/index.js';
+import { fakeClock } from '../helpers/fake-clock.js';
 
 const TARGET_TOKEN = 'IGAAworkerMcpTestToken0123456789abcdef';
 const TARGET_MCP_URL = 'https://mcp.example.test/mcp';
@@ -255,4 +256,25 @@ test('a failure building the per-request server is logged and answered 500', asy
 
   assert.equal(response.status, 500);
   assert.ok(lines.some((line) => line.includes('mcp request failed')));
+});
+
+test('token_status reports the configured expiry and warns before it', async () => {
+  const { stream } = captureSink();
+  const expiresAtSec = 1_797_897_600; // 2026-12-22T00:00:00Z
+  const fiveDaysBefore = (expiresAtSec - 5 * 24 * 3600) * 1000;
+  const env: WorkerEnv = { ...ENV, INSTAGRAM_TOKEN_EXPIRES_AT: '2026-12-22' };
+
+  const { json } = await call(
+    'tools/call',
+    { name: 'instagram_token_status', arguments: {} },
+    { stream, clock: fakeClock(fiveDaysBefore) },
+    env,
+  );
+
+  const status = json.result.structuredContent;
+  assert.equal(status.expiryState, 'expiring_soon');
+  assert.equal(status.expiresAt, '2026-12-22T00:00:00.000Z');
+  assert.equal(status.daysLeft, 5);
+  // A hand-set date is reported as such: nothing ties it to the token in the secret.
+  assert.match(status.warning, /without a token fingerprint/);
 });
