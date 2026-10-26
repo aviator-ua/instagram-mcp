@@ -16,6 +16,7 @@
 import { handleAuthorize, type ConsentHelpers, type OwnerProps } from './authorize.js';
 import { MCP_PATH, publicUrls, READ_SCOPE, strongSecret, type WorkerEnv } from './config.js';
 import { handleMcpRequest } from './mcp.js';
+import { snapshotStories } from './story-snapshots.js';
 import { secretsEqual } from './secrets.js';
 import { isInstagramError } from '../core/types.js';
 
@@ -27,6 +28,11 @@ export interface WorkerContext {
 /** A fetch handler in the shape the provider and the runtime call. */
 export interface FetchHandler<Env> {
   fetch(request: Request, env: Env, ctx: WorkerContext): Promise<Response>;
+}
+
+/** The Worker's exported handler: HTTP through the OAuth provider, plus the Cron Trigger. */
+export interface WorkerEntry extends FetchHandler<WorkerEnv> {
+  scheduled(controller: unknown, env: WorkerEnv, ctx: WorkerContext): Promise<void>;
 }
 
 /** The env the provider hands the default handler: the bindings plus its helpers. */
@@ -133,7 +139,7 @@ export function providerOptions(env: WorkerEnv): ProviderOptions {
  * answers every request `503` naming the variable, rather than serving an
  * endpoint whose OAuth metadata would point clients at the wrong origin.
  */
-export function createWorker(Provider: ProviderClass): FetchHandler<WorkerEnv> {
+export function createWorker(Provider: ProviderClass): WorkerEntry {
   let cached: { key: string; provider: FetchHandler<WorkerEnv> } | undefined;
   return {
     async fetch(request, env, ctx) {
@@ -151,6 +157,12 @@ export function createWorker(Provider: ProviderClass): FetchHandler<WorkerEnv> {
       const key = options.resourceMetadata.resource;
       if (cached?.key !== key) cached = { key, provider: new Provider(options) };
       return cached.provider.fetch(request, env, ctx);
+    },
+    // The Cron Trigger: snapshot live Stories when a STORY_DB is bound. A
+    // failure rejects, so the runtime records the cron run as failed.
+    async scheduled(_controller, env) {
+      if (env.STORY_DB === undefined) return;
+      await snapshotStories(env, env.STORY_DB);
     },
   };
 }

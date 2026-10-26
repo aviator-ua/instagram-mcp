@@ -36,6 +36,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   but `all`. An empty answer carries `emptyResultIsInconclusive: true` and a note
   instead of reading as an empty inbox; message text and usernames are fenced as
   untrusted text and never logged.
+- Worker: optional Story history. With a D1 database bound as `STORY_DB` and a
+  Cron Trigger, live Stories' insights are snapshotted every 15 minutes, and the
+  read-only tool `instagram_get_story_history` returns each Story's last
+  snapshot after it has expired and, with `includeSeries`, every snapshot as a
+  series (absent metrics listed, never stored as zero).
 
 ### Changed
 

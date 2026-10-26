@@ -35,6 +35,7 @@ Instagram Login:
 | `instagram_get_account_insights` | Account insights (views, reach, interactions, follows and unfollows, …) |
 | `instagram_get_audience_demographics` | Follower / engaged-audience demographics (100+ followers) |
 | `instagram_get_online_followers` | When followers are online |
+| `instagram_get_story_history` | Insights of past Stories (last snapshot, optionally the full series), from 15-minute snapshots — only with a `STORY_DB` binding; see §8a |
 | `instagram_list_conversations`, `instagram_get_messages` | Direct conversations — only once the `messaging` package is merged; see §8 |
 
 No write tool is registered: the catalogue is filtered to read-only tools *and*
@@ -53,6 +54,7 @@ deleting are not reachable from the Worker at all.
 | `MCP_PUBLIC_URL` | var | yes | Public origin of the Worker, no path (`https://instagram-mcp.<subdomain>.workers.dev`). It becomes the OAuth issuer and the resource `<origin>/mcp`, so it must be the exact URL clients use. |
 | `INSTAGRAM_ACCOUNT_ID` | var | no | IG professional account ID; defaults to `me`, which on Instagram Login is the account itself, for every tool including account insights. |
 | `IG_LOG_LEVEL`, `IG_TIMEOUT_MS`, `IG_MAX_ITEMS`, `IG_MAX_CONCURRENT`, `IG_PRETTY_JSON` | var | no | Same meaning and ranges as for the stdio server ([architecture.md §12](architecture.md)). |
+| `STORY_DB` | D1 binding | no | Story history (§8a): 15-minute snapshots of live Stories' insights, with a Cron Trigger. |
 | `OAUTH_KV` | KV binding | yes | OAuth clients, grants and tokens. The provider stores tokens and secrets only as hashes and encrypts grant props. |
 
 No other `IG_*` variable is read by the Worker: the tool surface, write mode and
@@ -205,6 +207,41 @@ and possible causes are listed in [messaging.md](messaging.md). Meta also limits
 reads to the 20 most recent messages per conversation. The server does not work
 around any of this: no scraping, no private endpoints.
 
+## 8a. Story history
+
+Instagram serves a Story, and its insights, only for the 24 hours it is live;
+`instagram_list_stories` cannot see an expired Story and its insights can no
+longer be read. With a D1 database bound as `STORY_DB`, the Worker's Cron
+Trigger (`*/15 * * * *`) takes a snapshot of every live Story's insights every
+15 minutes (the Story metric set: views, reach, replies, shares,
+total_interactions, navigation), and the read-only tool
+`instagram_get_story_history` returns each Story's last snapshot, newest first
+(`since`, `limit`). With `includeSeries: true` each Story also carries `series`:
+every snapshot, oldest first (up to ~96 per Story), to see how it grew over its
+24 hours.
+
+- Metrics are stored as numbers only where Instagram returned one; the rest are
+  listed in `missingMetrics`, never stored as 0.
+- The last snapshot can trail the final numbers by up to 15 minutes; Stories that
+  expired before the history was enabled are not there.
+- A Story whose insights read failed is still stored, with `error`. An expired
+  token fails the whole run (visible in the Worker's cron logs) instead.
+- The table is created on first use; no migration step. Each run makes one
+  Stories list call plus one insights call per live Story: 96 runs a day, so
+  about 96 insights calls per live Story per day, well inside Instagram's rate
+  limits. D1 keeps one row per Story per run (~96 rows per Story).
+
+Enable it:
+
+```sh
+npx wrangler d1 create instagram-mcp-stories -c wrangler.local.jsonc
+```
+
+Then, in `wrangler.local.jsonc`, uncomment `d1_databases` (binding **`STORY_DB`**,
+paste the printed `database_id`) and `triggers.crons`, and redeploy. Check a run
+with `npx wrangler tail -c wrangler.local.jsonc` (log line `story snapshot run`)
+or trigger one locally with `npx wrangler dev --test-scheduled`.
+
 ## 9. Troubleshooting
 
 | Symptom | Cause / fix |
@@ -263,7 +300,8 @@ Kept small so the fork can keep merging upstream:
 - **No automatic Instagram token refresh** (see §9).
 - **DM reads depend on Meta.** An empty conversation list cannot be told apart
   from a real empty inbox (§8).
-- **Story insights** exist only for live Stories; there is no history yet.
+- **Story insights** exist only for live Stories. With `STORY_DB` (§8a) every
+  15-minute snapshot is kept; Stories that expired before it was enabled are lost.
 - **No rate limiting inside the Worker**; use a WAF rule (§3).
 - **Graph API version** is the one pinned upstream (`src/core/host.ts`); the
   account was verified against a newer version, and Meta keeps old versions
@@ -276,13 +314,9 @@ Kept small so the fork can keep merging upstream:
 The Worker is a thin composition root over the shared layers, so these can be
 added without touching the tool code:
 
-- **D1 for historical analytics** — add a `d1_databases` binding and a module
-  that stores the `structuredContent` of insights calls.
-- **Cron Triggers for snapshots** — add `triggers.crons` and a `scheduled`
-  handler in `worker/index.ts` that calls the same `api/insights.ts` functions
-  through `createIgRequest`, as `src/worker/mcp.ts` does.
-- **Historical Story insights** — a cron snapshot of `instagram_list_stories` +
-  media insights before Stories expire.
+- **Historical account and media insights** — the Story snapshot job
+  (§8a, `src/worker/story-snapshots.ts`) is the pattern: the same D1 database
+  and cron can store account insights or per-post insights over time.
 - **Incremental sync** — `paging.after` cursors stored in D1 / KV.
 - **Token refresh automation** — a cron that calls the upstream
   `refreshToken()` and writes the result to a KV-backed secret store.

@@ -21,11 +21,18 @@ import { createAuthProvider } from '../core/auth.js';
 import { createLogger } from '../core/log.js';
 import { createRedactor, registerSecret } from '../core/redact.js';
 import { createIgRequest } from '../core/http.js';
-import { isInstagramError, type ResolvedProfile } from '../core/types.js';
+import {
+  isInstagramError,
+  type IgRequestFn,
+  type Logger,
+  type ResolvedProfile,
+  type Settings,
+} from '../core/types.js';
 import { registerTools } from '../mcp/registry.js';
 import type { ToolSpec } from '../mcp/define.js';
 import { allTools } from '../tools/index.js';
 import { upstreamEnv, type WorkerEnv } from './config.js';
+import { storyHistoryTool } from './story-history.js';
 
 const SERVER_NAME = 'instagram-mcp-ai';
 const SERVER_VERSION = '0.8.0';
@@ -88,6 +95,54 @@ export interface WorkerMcpDeps {
   tools?: readonly ToolSpec[];
 }
 
+/** Worker-only tools that exist when their binding does: Story history needs `STORY_DB`. */
+function extraTools(env: WorkerEnv): ToolSpec[] {
+  return env.STORY_DB === undefined ? [] : [storyHistoryTool(env.STORY_DB)];
+}
+
+/** Everything a Worker invocation (an MCP request or a cron run) needs from the shared layers. */
+export interface WorkerRuntime {
+  clock: Clock;
+  redact: (value: unknown) => unknown;
+  settings: Settings;
+  log: Logger;
+  profiles: ResolvedProfile[];
+  defaultName: string;
+  makeRequest: (profile: ResolvedProfile) => IgRequestFn;
+}
+
+/**
+ * Build the runtime from the Worker bindings: the upstream env, settings,
+ * logger, profiles and Graph request seam, wired exactly as `src/index.ts`
+ * wires them for stdio. The token is registered with the redactor before
+ * anything can log or throw with it in it.
+ *
+ * @throws InstagramError `kind: 'validation'` for a missing token or an invalid knob.
+ */
+export function workerRuntime(env: WorkerEnv, deps: WorkerMcpDeps = {}): WorkerRuntime {
+  const clock = deps.clock ?? systemClock;
+  const redact = createRedactor();
+  const igEnv = upstreamEnv(env);
+  registerSecret(igEnv.IG_ACCESS_TOKEN as string);
+  const settings = loadSettings(igEnv);
+  const log = createLogger({
+    level: settings.logLevel,
+    clock,
+    redact,
+    stream: deps.stream ?? consoleSink(),
+  });
+  const { profiles, defaultName } = loadProfiles(igEnv);
+  const makeRequest = (profile: ResolvedProfile): IgRequestFn =>
+    createIgRequest({
+      auth: createAuthProvider(profile, clock),
+      settings,
+      clock,
+      log,
+      fetchImpl: deps.fetchImpl,
+    });
+  return { clock, redact, settings, log, profiles, defaultName, makeRequest };
+}
+
 /** JSON-RPC error body for a request the server cannot serve at all. */
 function unavailable(message: string): Response {
   return Response.json(
@@ -108,31 +163,13 @@ export async function handleMcpRequest(
   env: WorkerEnv,
   deps: WorkerMcpDeps = {},
 ): Promise<Response> {
-  const clock = deps.clock ?? systemClock;
+  // Built first, so a configuration error below can still be redacted.
   const redact = createRedactor();
   try {
-    const igEnv = upstreamEnv(env);
-    // Registered before anything can log or throw with the token in it.
-    registerSecret(igEnv.IG_ACCESS_TOKEN as string);
-    const settings = loadSettings(igEnv);
-    const log = createLogger({
-      level: settings.logLevel,
-      clock,
-      redact,
-      stream: deps.stream ?? consoleSink(),
-    });
-    const { profiles, defaultName } = loadProfiles(igEnv);
-    const tools = workerTools(deps.tools ?? allTools);
+    const { clock, settings, log, profiles, defaultName, makeRequest } = workerRuntime(env, deps);
+    const tools = [...workerTools(deps.tools ?? allTools), ...extraTools(env)];
     const packages = [...new Set(tools.map((spec) => spec.package))].join(',');
     const registryEnv = { IG_TOOL_PACKAGES: 'all', IG_PACKAGES_READONLY: packages };
-    const makeRequest = (profile: ResolvedProfile) =>
-      createIgRequest({
-        auth: createAuthProvider(profile, clock),
-        settings,
-        clock,
-        log,
-        fetchImpl: deps.fetchImpl,
-      });
     const factory = (): McpServer => {
       const server = new McpServer({ name: SERVER_NAME, version: SERVER_VERSION });
       registerTools({
