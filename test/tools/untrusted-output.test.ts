@@ -137,6 +137,13 @@ function hostileResponse(opts: IgRequestOptions): unknown {
       },
     ],
     replies: { data: [hostileRecord()] },
+    // Messaging: a conversation row, its message list and one message.
+    updated_time: HOSTILE,
+    created_time: HOSTILE,
+    message: HOSTILE,
+    from: { id: HOSTILE, username: HOSTILE },
+    to: { data: [{ id: HOSTILE, username: HOSTILE }] },
+    messages: { data: [hostileRecord()] },
     media: { ...hostileRecord(), data: [hostileRecord()] },
     children: { data: [hostileRecord()] },
     business_discovery: { ...hostileRecord(), media: { data: [hostileRecord()] } },
@@ -165,6 +172,17 @@ const profile: ResolvedProfile = {
   appSecret: 'secret',
 };
 
+/**
+ * A Path A profile beside it: the messaging tools are `ig-login` only, so they
+ * are registered because this one exists and are called with `account` naming it.
+ */
+const igProfile: ResolvedProfile = {
+  name: 'ig',
+  authPath: 'ig-login',
+  accessToken: 'token-ig',
+  accountId: '17841400000000000',
+};
+
 /** Arguments wide enough for any tool; the free-text ones are hostile. */
 const BASE_ARGS: Record<string, unknown> = {
   mediaId: 'M1',
@@ -184,6 +202,7 @@ const BASE_ARGS: Record<string, unknown> = {
   edge: 'recent',
   hashtag: 'x',
   username: 'u',
+  conversation_id: 'T1',
 };
 
 /** Only the arguments a tool declares, so the strict input schema accepts them. */
@@ -199,6 +218,7 @@ function argsFor(name: string, apply: boolean): Record<string, unknown> {
   // `breakdown` takes a different vocabulary and is not free text.
   if (name === 'instagram_get_media_insights') delete args.breakdown;
   if ('apply' in spec.input) args.apply = apply;
+  if (spec.paths?.includes('fb-login') === false) args.account = igProfile.name;
   return args;
 }
 
@@ -210,7 +230,7 @@ async function liveServer(
   registerTools({
     server,
     tools: allTools,
-    profiles: [profile],
+    profiles: [profile, igProfile],
     defaultProfileName: 'default',
     settings: testSettings({
       prettyJson,

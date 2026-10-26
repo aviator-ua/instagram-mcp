@@ -28,6 +28,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   metric beside it is refused before a call, since Meta rejects the whole request.
 - Published metric rows for the two watch-time metrics carry
   `unit: "milliseconds"`; values are passed through unconverted.
+- `messaging` package with two read-only tools (Path A / `ig-login` only):
+  `instagram_list_conversations` (`GET /{ig-id}/conversations?platform=instagram`,
+  cursor-paginated) and `instagram_get_messages` (the newest messages of one
+  conversation, at most the 20 Instagram serves). No tool sends a message;
+  sending stays DEFER in `docs/messaging.md`. The package is in no named profile
+  but `all`. An empty answer carries `emptyResultIsInconclusive: true` and a note
+  instead of reading as an empty inbox; message text and usernames are fenced as
+  untrusted text and never logged.
 
 ### Changed
 

@@ -23,7 +23,12 @@ import type { Logger, ResolvedProfile } from '../../src/core/types.js';
 import { fakeClock } from '../helpers/fake-clock.js';
 import { testSettings } from '../helpers/settings.js';
 import { allTools } from '../../src/tools/index.js';
-import { GRAPH_ID_MESSAGE, GRAPH_ID_PATTERN } from '../../src/tools/ids.js';
+import {
+  GRAPH_ID_MESSAGE,
+  GRAPH_ID_PATTERN,
+  MESSAGING_ID_MESSAGE,
+  MESSAGING_ID_PATTERN,
+} from '../../src/tools/ids.js';
 
 // --- What the charset must and must not admit -------------------------------
 
@@ -90,6 +95,15 @@ const ID_FIELDS: readonly (readonly [string, string])[] = [
 ];
 
 /**
+ * Every tool argument that is a Direct Message object id, pinned by name. These
+ * carry their own rule ({@link MESSAGING_ID_PATTERN}): Instagram Login messaging
+ * ids are opaque base64url-style blobs well past the 64-character Graph bound.
+ */
+const MESSAGING_ID_FIELDS: readonly (readonly [string, string])[] = [
+  ['instagram_get_messages', 'conversation_id'],
+];
+
+/**
  * Peel `.optional()` / array wrappers so the sweep sees the string schema the
  * rule lives on. `children` is an array of ids, and three of the publishing
  * fields are optional, so both wrappers are real cases rather than defensive
@@ -104,13 +118,13 @@ function unwrap(schema: z.ZodType): z.ZodType {
   }
 }
 
-/** True when this schema enforces {@link GRAPH_ID_PATTERN}. */
-function carriesIdRule(schema: z.ZodType): boolean {
+/** True when this schema enforces `rule` (by default {@link GRAPH_ID_PATTERN}). */
+function carriesIdRule(schema: z.ZodType, rule: RegExp = GRAPH_ID_PATTERN): boolean {
   const inner = unwrap(schema);
   if (!(inner instanceof z.ZodString)) return false;
   return (inner.def.checks ?? []).some((c) => {
     const def = c._zod.def as { format?: string; pattern?: RegExp };
-    return def.format === 'regex' && def.pattern?.source === GRAPH_ID_PATTERN.source;
+    return def.format === 'regex' && def.pattern?.source === rule.source;
   });
 }
 
@@ -170,7 +184,9 @@ test('every argument NAMED like a Graph object id carries the id rule', () => {
     for (const [field, schema] of Object.entries(spec.input)) {
       if (!ID_NAME.test(field)) continue;
       named.push(`${spec.name}.${field}`);
-      if (!carriesIdRule(schema)) bare.push(`${spec.name}.${field}`);
+      if (!carriesIdRule(schema) && !carriesIdRule(schema, MESSAGING_ID_PATTERN)) {
+        bare.push(`${spec.name}.${field}`);
+      }
     }
   }
 
@@ -180,7 +196,8 @@ test('every argument NAMED like a Graph object id carries the id rule', () => {
     `these arguments are named like Graph object ids but declare a bare string: ` +
       `${bare.join(', ')}. Nothing then refuses a hostile id at the seam, and the api ` +
       `encoder is left as the only thing between it and a request path. Declare them with ` +
-      `graphObjectId() and add them to ID_FIELDS.`,
+      `graphObjectId() (or messagingObjectId() for a DM id) and add them to ID_FIELDS ` +
+      `(or MESSAGING_ID_FIELDS).`,
   );
 
   // Floor, and the only one that can fail: the check above is a claim about a
@@ -424,5 +441,70 @@ test('a legitimate id is NOT refused by the live seam', async () => {
     const text = textOf(res);
     assert.equal(text.includes('Invalid arguments'), false, `${id} passes validation: ${text}`);
     assert.ok(text.includes('NO-NETWORK-MARKER'), `${id} reached the request seam: ${text}`);
+  }
+});
+
+// --- Direct Message ids -----------------------------------------------------
+
+/**
+ * Conversation and message ids as Instagram Login issues them: opaque
+ * base64url-style blobs, typically 100–150 characters, sometimes `=`-padded.
+ * The first is the shape of a real conversation id; every one is past the
+ * 64-character Graph bound.
+ */
+const REAL_MESSAGING_IDS = [
+  'aWdfZAG06MTpJR01lc3NhZA2VUaHJlYWQ6MTc4NDE0MzU3NjI1NDY0NDU6MzQwMjgyMzY2ODQxNzEwMzAwOTQ5MTI4MTY2NjE2MDE2NTk5Nzk4',
+  'aWdfZAG1faXRlbToxOklHTWVzc2FnZAUlEOjE3ODQxNDM1NzYyNTQ2NDQ1OjM0MDI4MjM2Njg0MTcxMDMwMDk0OTEyODE2NjYxNjAxNjU5OTc5ODozMjA5NDc2NTQzMjEwOTg3NjU0MzIxMDk4NzY1NDMy',
+  'aWdfZAG06MTpJR01lc3NhZA2VUaHJlYWQ6MTc4NDE0MzU3NjI1NDY0NDU6MzQwMjgyMzY2ODQxNzEwMzAwOTQ5MTI4MTY2NjE2MDE2NTk5Nzk4==',
+  'T1',
+] as const;
+
+test('every DM id field carries the messaging rule and accepts real long ids verbatim', () => {
+  for (const [tool, field] of MESSAGING_ID_FIELDS) {
+    const schema = byName.get(tool)?.input[field];
+    assert.ok(schema, `${tool}.${field} exists`);
+    assert.ok(carriesIdRule(schema, MESSAGING_ID_PATTERN), `${tool}.${field} carries the rule`);
+    assert.equal(carriesIdRule(schema), false, `${tool}.${field} is not held to the 64 bound`);
+    for (const id of REAL_MESSAGING_IDS) {
+      const parsed = schema.safeParse(id);
+      assert.equal(parsed.success && parsed.data, id, `${tool}.${field} accepts ${id}`);
+    }
+    assert.ok((REAL_MESSAGING_IDS[0]?.length ?? 0) > 64);
+  }
+});
+
+test('every DM id field still refuses URL metacharacters, near misses and over-long ids', () => {
+  for (const [tool, field] of MESSAGING_ID_FIELDS) {
+    const schema = byName.get(tool)!.input[field]!;
+    for (const bad of [...HOSTILE_IDS, ...NEAR_MISS_IDS, 'abc+def', 'abc/def==']) {
+      assert.equal(schema.safeParse(bad).success, false, `${tool}.${field} refuses ${bad}`);
+    }
+    assert.equal(schema.safeParse('a'.repeat(512)).success, true);
+    assert.equal(schema.safeParse('a'.repeat(513)).success, false);
+  }
+});
+
+test('the messaging rejection states its rule and never echoes the value', async () => {
+  assert.equal(
+    MESSAGING_ID_MESSAGE,
+    'must be an Instagram messaging id: 1-512 characters, letters, digits, "_", "-" or "=" only ' +
+      '(use an id returned by instagram_list_conversations; "/", "?", "#", "&", "." and spaces ' +
+      'are not ids)',
+  );
+  assert.ok(MESSAGING_ID_PATTERN.source.includes('{1,512}'));
+  const cbs = registerAll();
+  for (const [tool, field] of MESSAGING_ID_FIELDS) {
+    for (const value of ['EAAG#SECRET-TOKEN-DO-NOT-ECHO-0123456789', 'x'.repeat(600)]) {
+      const res = await cbs.get(tool)!({ [field]: value });
+      assert.equal(res.isError, true);
+      const text = textOf(res);
+      assert.ok(text.includes(MESSAGING_ID_MESSAGE), `${tool} states the rule: ${text}`);
+      assert.equal(text.includes('SECRET-TOKEN-DO-NOT-ECHO'), false);
+      assert.equal(text.includes('x'.repeat(100)), false);
+      assert.equal(text.includes('NO-NETWORK-MARKER'), false);
+    }
+    // A real long id gets past validation and reaches the request seam.
+    const res = await cbs.get(tool)!({ [field]: REAL_MESSAGING_IDS[0] });
+    assert.ok(textOf(res).includes('NO-NETWORK-MARKER'), textOf(res));
   }
 });

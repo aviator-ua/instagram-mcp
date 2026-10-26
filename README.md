@@ -8,7 +8,7 @@
   expected (the block matches the published sibling servicenow-mcp-ai).
 -->
 
-| [![npm version](https://img.shields.io/npm/v/instagram-mcp-ai?style=flat-square&logo=npm&logoColor=white&label=npm)](https://www.npmjs.com/package/instagram-mcp-ai) | [![npm downloads](https://img.shields.io/npm/dm/instagram-mcp-ai?style=flat-square&logo=npm&logoColor=white&label=downloads)](https://www.npmjs.com/package/instagram-mcp-ai) | [![node](https://img.shields.io/node/v/instagram-mcp-ai?style=flat-square&logo=nodedotjs&logoColor=white&label=node)](https://www.npmjs.com/package/instagram-mcp-ai) | [![tools](https://img.shields.io/badge/tools-29-blue?style=flat-square)](#tools) | [![License: MIT](https://img.shields.io/npm/l/instagram-mcp-ai?style=flat-square&color=blue&label=license)](LICENSE) |
+| [![npm version](https://img.shields.io/npm/v/instagram-mcp-ai?style=flat-square&logo=npm&logoColor=white&label=npm)](https://www.npmjs.com/package/instagram-mcp-ai) | [![npm downloads](https://img.shields.io/npm/dm/instagram-mcp-ai?style=flat-square&logo=npm&logoColor=white&label=downloads)](https://www.npmjs.com/package/instagram-mcp-ai) | [![node](https://img.shields.io/node/v/instagram-mcp-ai?style=flat-square&logo=nodedotjs&logoColor=white&label=node)](https://www.npmjs.com/package/instagram-mcp-ai) | [![tools](https://img.shields.io/badge/tools-31-blue?style=flat-square)](#tools) | [![License: MIT](https://img.shields.io/npm/l/instagram-mcp-ai?style=flat-square&color=blue&label=license)](LICENSE) |
 | :--: | :--: | :--: | :--: | :--: |
 | [![CI](https://img.shields.io/github/actions/workflow/status/IvanBBaev/instagram-mcp/ci.yml?branch=main&style=flat-square&logo=githubactions&logoColor=white&label=CI)](https://github.com/IvanBBaev/instagram-mcp/actions/workflows/ci.yml) | [![coverage](https://img.shields.io/codecov/c/github/IvanBBaev/instagram-mcp/main?style=flat-square&logo=codecov&logoColor=white&label=coverage)](https://codecov.io/gh/IvanBBaev/instagram-mcp) | [![last commit](https://img.shields.io/github/last-commit/IvanBBaev/instagram-mcp?style=flat-square&logo=git&logoColor=white&label=last%20commit)](https://github.com/IvanBBaev/instagram-mcp/commits/main) | [![MCP](https://img.shields.io/badge/MCP-server-orange?style=flat-square)](https://modelcontextprotocol.io) | [![Known Vulnerabilities](https://snyk.io/test/npm/instagram-mcp-ai/badge.svg)](https://snyk.io/test/npm/instagram-mcp-ai) |
 
@@ -47,8 +47,8 @@ _Built and maintained in my own time — a
 
 ## What it does
 
-The server exposes an Instagram professional account through **29 MCP tools**
-grouped into six packages:
+The server exposes an Instagram professional account through **31 MCP tools**
+grouped into seven packages:
 
 - **Content publishing** — feed images, 2–10 image carousels, Reels and Stories
   via the container → publish flow, plus one-call helpers (`instagram_post_image`
@@ -64,6 +64,9 @@ grouped into six packages:
   business/competitor discovery. *(Path B / `fb-login` only — see below.)*
 - **Account** — profile, linked Facebook Pages / IG accounts, and a token-status
   report (auth path, expiry, days-left, refresh warning).
+- **Messaging (read-only)** — list Direct Message conversations and read the 20
+  most recent messages of one. No tool sends a message. *(Path A / `ig-login`
+  only, and in no profile but `all` — see [docs/messaging.md](docs/messaging.md).)*
 
 Every tool carries MCP annotations (`readOnlyHint`, `destructiveHint`,
 `idempotentHint`) so clients apply the right confirmation UX, and every mutation
@@ -242,10 +245,12 @@ explicit comma list of packages:
 | `core` (default) | `account, media, publishing, comments, insights` | the everyday read + publish + moderate set | 26 |
 | `reader` | `account, media, insights, comments, discovery` | read, insights and discovery — **forced read-only** (Path B for discovery) | 16 |
 | `publisher` | `account, media, publishing, comments` | publish and moderate | 22 |
-| `all` | every package | the full surface | 29 |
+| `all` | every package | the full surface | 31 |
 
-The six packages are `account`, `media`, `insights`, `publishing`, `comments`
-and `discovery`. Two more knobs refine a selection: `IG_PACKAGES_DENY` removes
+The seven packages are `account`, `media`, `insights`, `publishing`, `comments`,
+`discovery` and `messaging`. `messaging` (read-only DMs) is in no named profile
+but `all`, because a DM inbox holds other people's private messages: name it in
+an explicit list to expose it. Two more knobs refine a selection: `IG_PACKAGES_DENY` removes
 packages after the profile resolves, and `IG_PACKAGES_READONLY` forces a
 package's write tools off (its read tools stay).
 
@@ -261,7 +266,8 @@ is registered only when at least one configured profile is on that path, and the
 per-call guard still rejects a mismatched `account` argument. So a deployment
 with Path A credentials only drops the four `fb-login`-only tools
 (`instagram_list_linked_accounts` plus the three discovery tools), while adding a
-single Path B profile alongside brings them back.
+single Path B profile alongside brings them back. The two messaging tools are the
+mirror image: `ig-login` only, so a Path-B-only deployment does not register them.
 
 ## Tools
 
@@ -303,6 +309,8 @@ and `Write` for mutating ones (writes preview by default — see
 | `instagram_discover_business` | discovery | fb-login | Read | Fetch another business/creator's PUBLIC profile and recent media by handle via GET /{ig-id}?fields=business_discovery.username(&lt;handle&gt;){followers_count,media_count,media{...}}. |
 | `instagram_get_hashtag_media` | discovery | fb-login | Read | List PUBLIC media under a hashtag id via GET /{hashtag-id}/top_media or /{hashtag-id}/recent_media (choose via `edge`), which require the operated account's id as user_id. |
 | `instagram_search_hashtag` | discovery | fb-login | Read | Resolve a hashtag name to its Instagram hashtag id(s) via GET /ig_hashtag_search?user_id={ig-id}&amp;q=&lt;hashtag&gt; (the returned id feeds instagram_get_hashtag_media). |
+| `instagram_get_messages` | messaging | ig-login | Read | Read the newest messages of one Direct Message conversation (GET /{conversation-id}?fields=messages, then each message with id, created_time, from, to, message). |
+| `instagram_list_conversations` | messaging | ig-login | Read | List the Direct Message conversations of the operated account (GET /{ig-id}/conversations?platform=instagram), most recently active first, cursor-paginated. |
 <!-- END AUTOGEN:tools -->
 
 ## Configuration
